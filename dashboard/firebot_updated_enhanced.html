@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>FireBot Command Center - Enhanced</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client/dist/socket.io.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        /* Existing styles unchanged */
+        .flame-animation {
+            animation: flame 1s ease-in-out infinite alternate;
+        }
+        @keyframes flame {
+            0% { opacity: 0.8; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1.05); }
+        }
+        /* ... other existing styles ... */
+
+        /* New styles for heatmap modal */
+        #heatmap-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #heatmap-modal img {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 0.5rem;
+            box-shadow: 0 0 15px rgba(255, 69, 0, 0.8);
+        }
+        #heatmap-modal .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            font-size: 2rem;
+            color: white;
+            cursor: pointer;
+        }
+        /* Accessibility improvements */
+        button:focus, input:focus {
+            outline: 3px solid #f59e0b;
+            outline-offset: 2px;
+        }
+
+        /* Mobile responsiveness styles */
+        .container {
+            max-width: 100vw;
+            width: 100%;
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        @media (max-width: 640px) {
+            .container {
+                padding-left: 0.25rem;
+                padding-right: 0.25rem;
+            }
+            h1, h2, h3 {
+                font-size: 1.1rem;
+            }
+            button, input {
+                font-size: 1rem;
+                padding: 0.5rem 0.75rem;
+            }
+            #admin-panel, .mb-6, .mb-4 {
+                margin-bottom: 1rem !important;
+            }
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0,0,0,0);
+            border: 0;
+        }
+        a:focus, button:focus, select:focus, input:focus {
+            outline: 3px solid #f59e0b;
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-6" role="main" aria-label="FireBot Command Center Dashboard">
+        <!-- Existing header and main content unchanged -->
+        <header>
+            <nav aria-label="Main navigation">
+                <ul class="flex space-x-4">
+                    <li><a href="#" class="underline focus:outline-none focus:ring-2 focus:ring-yellow-400" tabindex="0">Dashboard</a></li>
+                    <li><a href="#" class="underline focus:outline-none focus:ring-2 focus:ring-yellow-400" tabindex="0">Settings</a></li>
+                </ul>
+            </nav>
+            <div class="flex items-center space-x-2 mt-2">
+                <label for="lang-select" class="sr-only">Language</label>
+                <select id="lang-select" aria-label="Select language" class="text-black rounded px-2 py-1">
+                    <option value="en">English</option>
+                    <option value="es">Español</option>
+                    <option value="bn">বাংলা</option>
+                </select>
+            </div>
+        </header>
+
+        <!-- Add a button to open heatmap modal -->
+        <button id="open-heatmap-btn" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded mb-4" aria-haspopup="dialog" aria-controls="heatmap-modal" aria-expanded="false">
+            <i class="fas fa-fire"></i> View Latest Heatmap
+        </button>
+
+        <!-- Heatmap Modal -->
+        <div id="heatmap-modal" class="flex" role="dialog" aria-modal="true" aria-labelledby="heatmap-title" tabindex="-1">
+            <span class="close-btn" role="button" aria-label="Close heatmap modal" tabindex="0">&times;</span>
+            <img id="heatmap-image" src="" alt="Heatmap Visualization" />
+        </div>
+
+        <!-- Real-time Temperature Chart -->
+        <div class="mb-6">
+            <canvas id="realtime-temp-chart" width="400" height="120" class="bg-gray-800 rounded shadow"></canvas>
+        </div>
+
+        <!-- User Authentication UI -->
+        <div class="mb-6 flex items-center space-x-4">
+            <input id="username" type="text" placeholder="Username" class="px-2 py-1 rounded text-black" />
+            <input id="password" type="password" placeholder="Password" class="px-2 py-1 rounded text-black" />
+            <button id="login-btn" class="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded">Login</button>
+            <button id="logout-btn" class="bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded hidden">Logout</button>
+            <span id="auth-status" class="ml-2 text-green-400"></span>
+        </div>
+
+        <!-- Role banner for admin users -->
+        <div id="role-banner" class="mb-4 text-sm font-bold"></div>
+
+        <!-- Admin panel for additional controls and analytics (hidden by default) -->
+        <div id="admin-panel" class="hidden mb-6 p-4 bg-gray-800 rounded shadow">
+            <h2 class="text-lg font-bold mb-2">Admin Panel</h2>
+            <button id="view-incident-history" class="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded mb-2">View Incident History</button>
+            <button id="view-predictive-trends" class="bg-green-600 hover:bg-green-700 px-3 py-1 rounded mb-2">View Predictive Trends</button>
+            <!-- More admin controls can be added here -->
+        </div>
+
+        <!-- Existing dashboard content continues unchanged -->
+
+    </div>
+
+    <script src="fire_severity_prediction.js"></script>
+    <script>
+        // Heatmap modal logic
+        const heatmapModal = document.getElementById('heatmap-modal');
+        const heatmapImage = document.getElementById('heatmap-image');
+        const openHeatmapBtn = document.getElementById('open-heatmap-btn');
+        const closeHeatmapBtn = heatmapModal.querySelector('.close-btn');
+
+        openHeatmapBtn.addEventListener('click', () => {
+            // Fetch latest heatmap image URL from backend API
+            fetch('/api/latest_heatmap')
+                .then(response => response.json())
+                .then(data => {
+                    if(data.url) {
+                        heatmapImage.src = data.url + '?t=' + new Date().getTime(); // cache bust
+                        heatmapModal.style.display = 'flex';
+                        openHeatmapBtn.setAttribute('aria-expanded', 'true');
+                        heatmapModal.focus();
+                    } else {
+                        alert('No heatmap available.');
+                    }
+                })
+                .catch(err => {
+                    console.error('Error fetching heatmap:', err);
+                    alert('Failed to load heatmap.');
+                });
+        });
+
+        closeHeatmapBtn.addEventListener('click', () => {
+            heatmapModal.style.display = 'none';
+            heatmapImage.src = '';
+            openHeatmapBtn.setAttribute('aria-expanded', 'false');
+            openHeatmapBtn.focus();
+        });
+
+        closeHeatmapBtn.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                closeHeatmapBtn.click();
+            }
+        });
+
+        // WebSocket real-time updates
+        const socket = io();
+
+        socket.on('connect', () => {
+            console.log('Connected to WebSocket server');
+        });
+
+        socket.on('sensor_update', (data) => {
+            // Update sensor values dynamically
+            document.getElementById('temp-value').textContent = data.temperature;
+            document.getElementById('flame-status').textContent = data.flameDetected ? 'DETECTED' : 'CLEAR';
+            document.getElementById('flame-status').className = data.flameDetected ? 'text-red-500 flame-animation' : 'text-green-500';
+            document.getElementById('gas-value').textContent = data.gasLevel;
+            document.getElementById('power-value').textContent = data.powerConsumption;
+
+            // Update real-time temperature chart
+            updateTempChart(data.temperature);
+        });
+
+        socket.on('alert_update', (alert) => {
+            // Show alert badge or notification
+            const alertBadge = document.getElementById('alert-badge');
+            alertBadge.classList.remove('hidden');
+            alertBadge.title = alert.message;
+            // Additional UI alert logic can be added here
+        });
+
+        // Real-time temperature chart
+        const tempChartCtx = document.getElementById('realtime-temp-chart').getContext('2d');
+        const tempChartData = {
+            labels: [],
+            datasets: [{
+                label: 'Temperature (°C)',
+                data: [],
+                borderColor: 'rgb(239,68,68)',
+                backgroundColor: 'rgba(239,68,68,0.2)',
+                tension: 0.3
+            }]
+        };
+        const tempChart = new Chart(tempChartCtx, {
+            type: 'line',
+            data: tempChartData,
+            options: {
+                responsive: true,
+                plugins: { legend: { display: true } },
+                scales: { x: { display: false }, y: { beginAtZero: true } }
+            }
+        });
+        function updateTempChart(temp) {
+            const now = new Date().toLocaleTimeString();
+            tempChartData.labels.push(now);
+            tempChartData.datasets[0].data.push(temp);
+            if (tempChartData.labels.length > 20) {
+                tempChartData.labels.shift();
+                tempChartData.datasets[0].data.shift();
+            }
+            tempChart.update();
+        }
+
+        // User authentication logic (frontend only, backend needed)
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const authStatus = document.getElementById('auth-status');
+        loginBtn.addEventListener('click', () => {
+            // Placeholder: send login request to backend
+            loginBtn.classList.add('hidden');
+            logoutBtn.classList.remove('hidden');
+            authStatus.textContent = 'Logged in';
+        });
+        logoutBtn.addEventListener('click', () => {
+            // Placeholder: send logout request to backend
+            loginBtn.classList.remove('hidden');
+            logoutBtn.classList.add('hidden');
+            authStatus.textContent = 'Logged out';
+        });
+
+        // Role-based UI logic
+        function setRoleUI(role) {
+            document.getElementById('role-banner').textContent = `Role: ${role}`;
+            if (role === 'admin') {
+                document.getElementById('admin-panel').classList.remove('hidden');
+            } else {
+                document.getElementById('admin-panel').classList.add('hidden');
+            }
+        }
+        // Simulate role fetch after login (replace with real backend call)
+        let currentRole = 'viewer';
+        loginBtn.addEventListener('click', () => {
+            // ...existing code...
+            // Simulate role assignment
+            currentRole = document.getElementById('username').value === 'admin' ? 'admin' : 'viewer';
+            setRoleUI(currentRole);
+        });
+        logoutBtn.addEventListener('click', () => {
+            // ...existing code...
+            currentRole = 'viewer';
+            setRoleUI(currentRole);
+        });
+        setRoleUI(currentRole);
+
+        // Analytics panel logic (placeholder)
+        document.getElementById('view-incident-history').onclick = () => {
+            alert('Incident history feature coming soon!');
+        };
+        document.getElementById('view-predictive-trends').onclick = () => {
+            alert('Predictive trends feature coming soon!');
+        };
+
+        // Localization/i18n logic (simple demo)
+        const translations = {
+            en: {
+                'Dashboard': 'Dashboard',
+                'Settings': 'Settings',
+                'Role:': 'Role:',
+                'Admin Panel': 'Admin Panel',
+                'View Incident History': 'View Incident History',
+                'View Predictive Trends': 'View Predictive Trends',
+                'Login': 'Login',
+                'Logout': 'Logout',
+                'Temperature (°C)': 'Temperature (°C)'
+            },
+            es: {
+                'Dashboard': 'Tablero',
+                'Settings': 'Configuraciones',
+                'Role:': 'Rol:',
+                'Admin Panel': 'Panel de Admin',
+                'View Incident History': 'Ver Historial de Incidentes',
+                'View Predictive Trends': 'Ver Tendencias Predictivas',
+                'Login': 'Iniciar sesión',
+                'Logout': 'Cerrar sesión',
+                'Temperature (°C)': 'Temperatura (°C)'
+            },
+            bn: {
+                'Dashboard': 'ড্যাশবোর্ড',
+                'Settings': 'সেটিংস',
+                'Role:': 'ভূমিকা:',
+                'Admin Panel': 'অ্যাডমিন প্যানেল',
+                'View Incident History': 'ইনসিডেন্ট ইতিহাস দেখুন',
+                'View Predictive Trends': 'ভবিষ্যদ্বাণীমূলক প্রবণতা দেখুন',
+                'Login': 'লগইন',
+                'Logout': 'লগআউট',
+                'Temperature (°C)': 'তাপমাত্রা (°C)'
+            }
+        };
+        function localizeUI(lang) {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (translations[lang] && translations[lang][key]) {
+                    el.textContent = translations[lang][key];
+                }
+            });
+        }
+        document.getElementById('lang-select').addEventListener('change', (e) => {
+            localizeUI(e.target.value);
+        });
+
+        // Additional dynamic updates to logs and detection history can be added in fire_severity_prediction.js
+    </script>
+</body>
+</html>

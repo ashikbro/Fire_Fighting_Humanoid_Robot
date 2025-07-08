@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import messagebox
 import requests
+import webbrowser
+import os
 
 API_URL = "http://localhost:8000/predict"
 
@@ -26,6 +28,10 @@ class FireSeverityApp:
         # Add Clear button
         self.clear_button = tk.Button(root, text="Clear Inputs", command=self.clear_inputs)
         self.clear_button.grid(row=6, column=0, columnspan=2, pady=5)
+
+        # Add Open Dashboard button
+        self.dashboard_button = tk.Button(root, text="Open Dashboard", command=self.open_dashboard)
+        self.dashboard_button.grid(row=7, column=0, columnspan=2, pady=10)
 
     def create_input_field(self, label_text, row):
         label = tk.Label(self.root, text=label_text)
@@ -60,6 +66,14 @@ class FireSeverityApp:
             self.result_label.config(text=f"🔥 Predicted Fire Severity: {severity}")
         except requests.exceptions.RequestException as e:
             messagebox.showerror("API Error", f"Failed to get prediction: {e}")
+
+    def open_dashboard(self):
+        # Path to the dashboard HTML file in the dashboard directory
+        dashboard_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dashboard", "index.html"))
+        if os.path.exists(dashboard_path):
+            webbrowser.open_new_tab(f"file:///{dashboard_path}")
+        else:
+            messagebox.showerror("File Not Found", f"Dashboard file not found at {dashboard_path}")
 
 if __name__ == "__main__":
     root = tk.Tk()

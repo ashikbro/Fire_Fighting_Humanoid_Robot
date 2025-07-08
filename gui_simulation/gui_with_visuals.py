@@ -21,7 +21,7 @@ class VisualComparisonApp:
 
             if os.path.exists(path):
                 img = Image.open(path)
-                img = img.resize((400, 300), Image.ANTIALIAS)
+                img = img.resize((400, 300), Image.Resampling.LANCZOS)
                 photo = ImageTk.PhotoImage(img)
                 img_label = tk.Label(root, image=photo)
                 img_label.image = photo

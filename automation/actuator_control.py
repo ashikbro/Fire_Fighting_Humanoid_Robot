@@ -1,8 +1,5 @@
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
 class ActuatorController:
     """
     Control module for robot actuators such as motors, water pumps, and extinguishers.
@@ -21,7 +18,8 @@ class ActuatorController:
         try:
             self.motors_state = f"moving forward at speed {speed}"
             logging.info(self.motors_state)
-            # TODO: Add hardware control code here
+            # Simulated hardware control code
+            print(f"[Simulated] Motors moving forward at speed {speed}")
         except Exception as e:
             logging.error(f"Error moving forward: {e}")
 
@@ -32,7 +30,8 @@ class ActuatorController:
         try:
             self.motors_state = f"moving backward at speed {speed}"
             logging.info(self.motors_state)
-            # TODO: Add hardware control code here
+            # Simulated hardware control code
+            print(f"[Simulated] Motors moving backward at speed {speed}")
         except Exception as e:
             logging.error(f"Error moving backward: {e}")
 
@@ -43,7 +42,8 @@ class ActuatorController:
         try:
             self.motors_state = f"turning left by {angle} degrees"
             logging.info(self.motors_state)
-            # TODO: Add hardware control code here
+            # Simulated hardware control code
+            print(f"[Simulated] Motors turning left by {angle} degrees")
         except Exception as e:
             logging.error(f"Error turning left: {e}")
 
@@ -54,7 +54,8 @@ class ActuatorController:
         try:
             self.motors_state = f"turning right by {angle} degrees"
             logging.info(self.motors_state)
-            # TODO: Add hardware control code here
+            # Simulated hardware control code
+            print(f"[Simulated] Motors turning right by {angle} degrees")
         except Exception as e:
             logging.error(f"Error turning right: {e}")
 
@@ -65,7 +66,8 @@ class ActuatorController:
         try:
             self.motors_state = "stopped"
             logging.info(self.motors_state)
-            # TODO: Add hardware control code here
+            # Simulated hardware control code
+            print("[Simulated] Motors stopped")
         except Exception as e:
             logging.error(f"Error stopping motors: {e}")
 
@@ -76,7 +78,8 @@ class ActuatorController:
         try:
             self.water_pump_state = "on"
             logging.info("Water pump activated")
-            # TODO: Add hardware control code here
+            # Simulated hardware control code
+            print("[Simulated] Water pump activated")
         except Exception as e:
             logging.error(f"Error activating water pump: {e}")
 
@@ -87,7 +90,8 @@ class ActuatorController:
         try:
             self.water_pump_state = "off"
             logging.info("Water pump deactivated")
-            # TODO: Add hardware control code here
+            # Simulated hardware control code
+            print("[Simulated] Water pump deactivated")
         except Exception as e:
             logging.error(f"Error deactivating water pump: {e}")
 
@@ -98,7 +102,8 @@ class ActuatorController:
         try:
             self.extinguisher_state = "on"
             logging.info("Extinguisher activated")
-            # TODO: Add hardware control code here
+            # Simulated hardware control code
+            print("[Simulated] Extinguisher activated")
         except Exception as e:
             logging.error(f"Error activating extinguisher: {e}")
 
@@ -109,6 +114,7 @@ class ActuatorController:
         try:
             self.extinguisher_state = "off"
             logging.info("Extinguisher deactivated")
-            # TODO: Add hardware control code here
+            # Simulated hardware control code
+            print("[Simulated] Extinguisher deactivated")
         except Exception as e:
             logging.error(f"Error deactivating extinguisher: {e}")

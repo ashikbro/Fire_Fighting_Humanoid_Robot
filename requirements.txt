@@ -9,3 +9,5 @@ lightgbm
 uvicorn
 fastapi
 tensorflow
+opencv-python
+python-dotenv

@@ -2,24 +2,24 @@ import os
 import requests
 import zipfile
 import io
+import logging
 
-def download_and_extract_zip(url, extract_to):
+def download_and_extract_zip(url: str, extract_to: str) -> None:
     if not os.path.exists(extract_to):
         os.makedirs(extract_to)
-    print(f"Downloading from {url} ...")
+    logging.info(f"Downloading from {url} ...")
     response = requests.get(url)
     if response.status_code == 200:
         with zipfile.ZipFile(io.BytesIO(response.content)) as zip_ref:
             zip_ref.extractall(extract_to)
-        print(f"Extracted to {extract_to}")
+        logging.info(f"Extracted to {extract_to}")
     else:
-        print(f"Failed to download from {url}, status code: {response.status_code}")
+        logging.error(f"Failed to download from {url}, status code: {response.status_code}")
 
-def download_fire_datasets(base_dir='vision_fire_detection/Datasets'):
-    import os
+def download_fire_datasets(base_dir: str = 'vision_fire_detection/Datasets') -> None:
     skip_download = os.getenv('SKIP_DATASET_DOWNLOAD', '0') == '1'
     if skip_download:
-        print("Skipping dataset download due to SKIP_DATASET_DOWNLOAD environment variable.")
+        logging.info("Skipping dataset download due to SKIP_DATASET_DOWNLOAD environment variable.")
         return
 
     fire_url = 'https://github.com/Aravindlivewire/Fire-Detection-Dataset/archive/refs/heads/master.zip'
@@ -56,7 +56,8 @@ def download_fire_datasets(base_dir='vision_fire_detection/Datasets'):
     # Cleanup extracted directory
     import shutil
     shutil.rmtree(extracted_dir)
-    print("Dataset download and organization complete.")
+    logging.info("Dataset download and organization complete.")
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     download_fire_datasets()

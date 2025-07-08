@@ -1,8 +1,8 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score, roc_auc_score
 import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
@@ -15,9 +15,8 @@ from sklearn.impute import SimpleImputer
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 def main():
-    import os
     parser = argparse.ArgumentParser(description="Train a fire severity prediction model.")
-    parser.add_argument("--data", type=str, default="data/fire_data_bangladesh.csv", help="Path to the dataset CSV file.")
+    parser.add_argument("--data", type=str, nargs='+', default=["data/fire_data_bangladesh.csv"], help="Paths to dataset CSV files.")
     parser.add_argument("--model", type=str, default="models/fire_severity_model.pkl", help="Path to save the trained model.")
     parser.add_argument("--encoder", type=str, default="models/label_encoder.pkl", help="Path to save the label encoder.")
     parser.add_argument("--confusion", type=str, default="results/confusion_matrix.png", help="Path to save the confusion matrix image.")
@@ -25,15 +24,19 @@ def main():
     parser.add_argument("--model_type", type=str, default="random_forest", choices=["random_forest", "gradient_boosting"], help="Type of model to train.")
     args = parser.parse_args()
 
-    # Load dataset with error handling
-    if not os.path.exists(args.data):
-        logging.error(f"❌ Error: Dataset file '{args.data}' not found.")
-        exit(1)
-    try:
-        df = pd.read_csv(args.data)
-    except Exception as e:
-        logging.error(f"❌ Error loading dataset: {e}")
-        exit(1)
+    # Load and combine datasets with error handling
+    dfs = []
+    for data_path in args.data:
+        if not os.path.exists(data_path):
+            logging.error(f"❌ Error: Dataset file '{data_path}' not found.")
+            exit(1)
+        try:
+            df_part = pd.read_csv(data_path)
+            dfs.append(df_part)
+        except Exception as e:
+            logging.error(f"❌ Error loading dataset '{data_path}': {e}")
+            exit(1)
+    df = pd.concat(dfs, ignore_index=True)
 
     # Check if required columns exist
     required_columns = ['Temperature', 'SmokeDensity', 'GasLevel', 'Humidity', 'FireSeverity']
@@ -58,13 +61,17 @@ def main():
     imputer = SimpleImputer(strategy='mean')
     X_imputed = pd.DataFrame(imputer.fit_transform(X), columns=X.columns)
 
+    # Scale features
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X_imputed)
+
     # Encode target labels
     label_encoder = LabelEncoder()
     y_encoded = label_encoder.fit_transform(y)
 
     # Split dataset
     X_train, X_test, y_train, y_test = train_test_split(
-        X_imputed, y_encoded, test_size=0.2, random_state=42
+        X_scaled, y_encoded, test_size=0.2, random_state=42
     )
 
     # Select model type
@@ -123,8 +130,6 @@ def main():
     plt.close()
     logging.info(f"🖼️ Feature importance saved as '{args.feature_importance}'")
 
-    import os
-
     # Ensure directories exist before saving
     model_dir = os.path.dirname(args.model)
     encoder_dir = os.path.dirname(args.encoder)
@@ -139,8 +144,10 @@ def main():
     try:
         joblib.dump(best_model, args.model)
         joblib.dump(label_encoder, args.encoder)
+        joblib.dump(scaler, os.path.join(os.path.dirname(args.model), 'scaler.pkl'))
         logging.info(f"✅ Model saved as '{args.model}'")
         logging.info(f"✅ Label encoder saved as '{args.encoder}'")
+        logging.info(f"✅ Scaler saved as '{os.path.join(os.path.dirname(args.model), 'scaler.pkl')}'")
     except Exception as e:
         logging.error(f"❌ Error saving model or label encoder: {e}")
         exit(1)
@@ -149,6 +156,22 @@ def main():
     accuracy = accuracy_score(y_test, y_pred)
     logging.info(f"Accuracy: {accuracy:.2f}")
     print(f"Accuracy: {accuracy:.2f}")
+
+    # Additional evaluation metrics
+    f1 = f1_score(y_test, y_pred, average='weighted')
+    try:
+        # For multiclass, use 'ovr' (one-vs-rest) strategy
+        y_proba = best_model.predict_proba(X_test)
+        auc = roc_auc_score(y_test, y_proba, multi_class='ovr')
+    except Exception as e:
+        logging.warning(f"Could not compute AUC: {e}")
+        auc = None
+
+    logging.info(f"F1 Score: {f1:.2f}")
+    print(f"F1 Score: {f1:.2f}")
+    if auc is not None:
+        logging.info(f"AUC: {auc:.2f}")
+        print(f"AUC: {auc:.2f}")
 
 if __name__ == "__main__":
     main()

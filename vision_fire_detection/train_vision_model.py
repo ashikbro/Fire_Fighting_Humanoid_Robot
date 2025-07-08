@@ -5,6 +5,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
 from tensorflow.keras.optimizers import Adam
 import argparse
+import logging
 
 def build_model(input_shape=(64, 64, 3)):
     model = Sequential([
@@ -24,7 +25,7 @@ def build_model(input_shape=(64, 64, 3)):
                   metrics=['accuracy'])
     return model
 
-def main(data_dir, epochs, batch_size):
+def main(data_dir: str, epochs: int, batch_size: int) -> None:
     train_dir = os.path.join(data_dir, 'train')
     val_dir = os.path.join(data_dir, 'val')
 
@@ -62,10 +63,11 @@ def main(data_dir, epochs, batch_size):
         validation_data=val_generator
     )
 
-    model.save(os.path.join(data_dir, 'fire_detection_cnn.h5'))
-    print("Model training complete and saved.")
+    model.save(os.path.join(data_dir, 'fire_detection_cnn.keras'))
+    logging.info("Model training complete and saved in Keras format.")
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser(description='Train CNN for fire detection')
     parser.add_argument('--data_dir', type=str, required=True, help='Path to dataset directory with train/val folders')
     parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs')

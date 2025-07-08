@@ -2,18 +2,14 @@ import threading
 import subprocess
 import time
 import sys
-import logging
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 def run_subprocess(command, name):
     try:
-        logging.info(f"Starting {name} subprocess: {' '.join(command)}")
+        print(f"Starting {name} subprocess: {' '.join(command)}")
         process = subprocess.Popen(command)
         return process
     except Exception as e:
-        logging.error(f"Failed to start {name} subprocess: {e}")
+        print(f"Failed to start {name} subprocess: {e}")
         return None
 
 def run_api():
@@ -23,12 +19,12 @@ def run_api():
 def run_gui():
     # Run GUI application
     try:
-        logging.info("Starting GUI application")
+        print("Starting GUI application")
         subprocess.run([sys.executable, "gui_simulation/gui_app.py"], check=True)
     except subprocess.CalledProcessError as e:
-        logging.error(f"GUI application exited with error: {e}")
+        print(f"GUI application exited with error: {e}")
     except Exception as e:
-        logging.error(f"Failed to start GUI application: {e}")
+        print(f"Failed to start GUI application: {e}")
 
 def run_gui_visuals():
     # Run GUI for model comparison visuals
