@@ -1,0 +1,5 @@
+# User roles for Fire Fighting Humanoid Robot
+# username:password:role (admin/operator/viewer)
+admin:adminpass:admin
+operator:operatorpass:operator
+viewer:viewerpass:viewer
