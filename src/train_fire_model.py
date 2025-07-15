@@ -10,26 +10,49 @@ import argparse
 import logging
 import os
 from sklearn.impute import SimpleImputer
+import requests
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
+def download_file(url, dest_path):
+    """Download a file from a URL to a destination path."""
+    if not os.path.exists(os.path.dirname(dest_path)):
+        os.makedirs(os.path.dirname(dest_path))
+    
+    try:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()  # Raise an exception for bad status codes
+        with open(dest_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        logging.info(f"✅ Downloaded '{dest_path}' from '{url}'")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"❌ Error downloading file from '{url}': {e}")
+        exit(1)
+
 def main():
     parser = argparse.ArgumentParser(description="Train a fire severity prediction model.")
     parser.add_argument("--data", type=str, nargs='+', default=["data/fire_data_bangladesh.csv"], help="Paths to dataset CSV files.")
-    parser.add_argument("--model", type=str, default="models/fire_severity_model.pkl", help="Path to save the trained model.")
-    parser.add_argument("--encoder", type=str, default="models/label_encoder.pkl", help="Path to save the label encoder.")
-    parser.add_argument("--confusion", type=str, default="results/confusion_matrix.png", help="Path to save the confusion matrix image.")
-    parser.add_argument("--feature_importance", type=str, default="results/feature_importance.png", help="Path to save the feature importance image.")
+    parser.add_argument("--model_dir", type=str, default="models", help="Directory to save the trained models.")
+    parser.add_argument("--results_dir", type=str, default="results", help="Directory to save the evaluation results.")
     parser.add_argument("--model_type", type=str, default="random_forest", choices=["random_forest", "gradient_boosting"], help="Type of model to train.")
     args = parser.parse_args()
+
+    # Create directories if they don't exist
+    os.makedirs(args.model_dir, exist_ok=True)
+    os.makedirs(args.results_dir, exist_ok=True)
+
+    # Define the dataset URL
+    DATASET_URL = "https://raw.githubusercontent.com/a-m-a-n-s-i-n-g-h/Fire-Fighting-Humanoid-Robot/main/data/fire_data_bangladesh.csv"
 
     # Load and combine datasets with error handling
     dfs = []
     for data_path in args.data:
         if not os.path.exists(data_path):
-            logging.error(f"❌ Error: Dataset file '{data_path}' not found.")
-            exit(1)
+            logging.warning(f"⚠️ Dataset file '{data_path}' not found. Attempting to download...")
+            download_file(DATASET_URL, data_path)
+        
         try:
             df_part = pd.read_csv(data_path)
             dfs.append(df_part)
@@ -102,7 +125,11 @@ def main():
     y_pred = best_model.predict(X_test)
 
     # Classification report
-    logging.info("📊 Classification Report:\n%s", classification_report(y_test, y_pred, target_names=label_encoder.classes_))
+    report = classification_report(y_test, y_pred, target_names=label_encoder.classes_, output_dict=True)
+    report_df = pd.DataFrame(report).transpose()
+    report_path = os.path.join(args.results_dir, "classification_report.csv")
+    report_df.to_csv(report_path)
+    logging.info(f"📊 Classification report saved to '{report_path}'")
 
     # Confusion matrix
     conf_matrix = confusion_matrix(y_test, y_pred)
@@ -113,9 +140,10 @@ def main():
     plt.xlabel("Predicted")
     plt.ylabel("Actual")
     plt.tight_layout()
-    plt.savefig(args.confusion)
+    confusion_path = os.path.join(args.results_dir, "confusion_matrix.png")
+    plt.savefig(confusion_path)
     plt.close()
-    logging.info(f"🖼️ Confusion matrix saved as '{args.confusion}'")
+    logging.info(f"🖼️ Confusion matrix saved as '{confusion_path}'")
 
     # Feature importance plot
     importances = best_model.feature_importances_
@@ -126,28 +154,28 @@ def main():
     plt.xlabel("Importance")
     plt.ylabel("Feature")
     plt.tight_layout()
-    plt.savefig(args.feature_importance)
+    feature_importance_path = os.path.join(args.results_dir, "feature_importance.png")
+    plt.savefig(feature_importance_path)
     plt.close()
-    logging.info(f"🖼️ Feature importance saved as '{args.feature_importance}'")
+    logging.info(f"🖼️ Feature importance saved as '{feature_importance_path}'")
 
-    # Ensure directories exist before saving
-    model_dir = os.path.dirname(args.model)
-    encoder_dir = os.path.dirname(args.encoder)
-    confusion_dir = os.path.dirname(args.confusion)
-    feature_importance_dir = os.path.dirname(args.feature_importance)
+    # Model versioning
+    version = 1
+    while os.path.exists(os.path.join(args.model_dir, f"fire_severity_model_v{version}.pkl")):
+        version += 1
 
-    for directory in [model_dir, encoder_dir, confusion_dir, feature_importance_dir]:
-        if directory and not os.path.exists(directory):
-            os.makedirs(directory)
+    model_path = os.path.join(args.model_dir, f"fire_severity_model_v{version}.pkl")
+    encoder_path = os.path.join(args.model_dir, f"label_encoder_v{version}.pkl")
+    scaler_path = os.path.join(args.model_dir, f"scaler_v{version}.pkl")
 
     # Save model and encoder
     try:
-        joblib.dump(best_model, args.model)
-        joblib.dump(label_encoder, args.encoder)
-        joblib.dump(scaler, os.path.join(os.path.dirname(args.model), 'scaler.pkl'))
-        logging.info(f"✅ Model saved as '{args.model}'")
-        logging.info(f"✅ Label encoder saved as '{args.encoder}'")
-        logging.info(f"✅ Scaler saved as '{os.path.join(os.path.dirname(args.model), 'scaler.pkl')}'")
+        joblib.dump(best_model, model_path)
+        joblib.dump(label_encoder, encoder_path)
+        joblib.dump(scaler, scaler_path)
+        logging.info(f"✅ Model saved as '{model_path}'")
+        logging.info(f"✅ Label encoder saved as '{encoder_path}'")
+        logging.info(f"✅ Scaler saved as '{scaler_path}'")
     except Exception as e:
         logging.error(f"❌ Error saving model or label encoder: {e}")
         exit(1)

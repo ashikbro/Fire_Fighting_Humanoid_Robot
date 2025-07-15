@@ -1,60 +1,84 @@
-from flask import Flask, Response, request, jsonify, Blueprint
+from fastapi import FastAPI, Depends, HTTPException, status, Request, UploadFile, File, APIRouter, Form
+from fastapi.security import OAuth2PasswordRequestForm
+from src.security import API_KEY
+from fastapi import WebSocket
+from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 import cv2
 import threading
 import base64
 import numpy as np
+import asyncio
 import sys
 import os
-from dotenv import load_dotenv
 import time
-from functools import wraps
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import statistics
+from src.logger import logger
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import joblib
 from automation.robot_controller import RobotController
-from vision_fire_detection.fire_detection import FireDetection
-import logging
+from vision.object_detector import ObjectDetector
+from src.config import (
+    API_HOST, API_PORT, CAMERA_INDEX, SIMULATION_MODE, MODELS_DIR
+)
+from src.database import init_db, log_incident, get_incident_history as db_get_incident_history
+from fastapi.staticfiles import StaticFiles
+from src.security import get_api_key
 
-# Load environment variables from .env file
-load_dotenv()
+app = FastAPI()
 
-API_HOST = os.getenv('API_HOST', '127.0.0.1')
-API_PORT = int(os.getenv('API_PORT', 5000))
-DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes')
-CAMERA_INDEX = int(os.getenv('CAMERA_INDEX', 0))
-SIMULATION_MODE = os.getenv('SIMULATION_MODE', 'False').lower() in ('true', '1', 'yes')
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Or specify your frontend domain
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-app = Flask(__name__)
+# Mount the dashboard directory to serve static files
+app.mount("/dashboard", StaticFiles(directory="dashboard"), name="dashboard")
+
+# Load the trained model and label encoder
+try:
+    model = joblib.load(os.path.join(MODELS_DIR, "fire_severity_model.pkl"))
+    label_encoder = joblib.load(os.path.join(MODELS_DIR, "label_encoder.pkl"))
+    logger.info("Model and label encoder loaded successfully.")
+except FileNotFoundError:
+    logger.warning("Model or label encoder not found. Running without prediction capabilities.")
+    model = None
+    label_encoder = None
+except Exception as e:
+    logger.error(f"Error loading model or label encoder: {e}")
+    model = None
+    label_encoder = None
+
 
 # Initialize robot controller and fire detection
-robot_controller = RobotController()
-fire_detection = robot_controller.fire_detector
+object_detector = ObjectDetector(model_path='./runs/detect/train/weights/best.pt')
+patrol_waypoints = [[10, 10], [10, 40], [40, 40], [40, 10]]
+robot_controller = RobotController(object_detector=object_detector, patrol_waypoints=patrol_waypoints)
 
 class SimulatedVideoCapture:
     def isOpened(self):
         return True
     def read(self):
-        # Return a blank image or a test pattern
-        import numpy as np
         frame = np.zeros((480, 640, 3), dtype=np.uint8)
         return True, frame
 
-# Video capture object (using camera index from env or simulation)
 if SIMULATION_MODE:
     video_capture = SimulatedVideoCapture()
-    logging.info("Simulation mode enabled: using simulated video input.")
+    logger.info("Simulation mode enabled: using simulated video input.")
 else:
-    video_capture = cv2.VideoCapture(CAMERA_INDEX)
+    video_capture = cv2.VideoCapture(CAMERA_INDEX, cv2.CAP_DSHOW)
     if not video_capture.isOpened():
-        logging.error("Could not open video device")
+        logger.error("Could not open video device")
 
-# Lock for thread-safe frame access
 frame_lock = threading.Lock()
 current_frame = None
 
-def safe_read_frame(video_capture, frame_lock):
+def safe_read_frame(video_capture: cv2.VideoCapture, frame_lock: threading.Lock) -> np.ndarray | None:
     try:
         ret, frame = video_capture.read()
         if not ret:
@@ -62,7 +86,7 @@ def safe_read_frame(video_capture, frame_lock):
         with frame_lock:
             return frame.copy()
     except Exception as e:
-        logging.error(f"Error reading frame: {e}")
+        logger.warning(f"Error reading frame: {e}")
         return None
 
 def capture_frames():
@@ -71,8 +95,8 @@ def capture_frames():
         frame = safe_read_frame(video_capture, frame_lock)
         if frame is not None:
             current_frame = frame
+        time.sleep(0.03) # Limit capture rate
 
-# Start frame capture thread
 capture_thread = threading.Thread(target=capture_frames)
 capture_thread.daemon = True
 capture_thread.start()
@@ -81,273 +105,237 @@ def generate_mjpeg():
     while True:
         with frame_lock:
             if current_frame is None:
+                time.sleep(0.1)
                 continue
             try:
-                ret, jpeg = cv2.imencode('.jpg', current_frame)
+                robot_controller.update_vision_data(current_frame)
+                detected_objects = object_detector.detect_objects(current_frame)
+                frame_with_boxes = object_detector.draw_boxes(current_frame, detected_objects)
+                ret, jpeg = cv2.imencode('.jpg', frame_with_boxes)
                 if not ret:
                     continue
                 frame_bytes = jpeg.tobytes()
             except Exception as e:
-                logging.error(f"MJPEG encoding error: {e}")
+                logger.error(f"MJPEG encoding error: {e}")
                 continue
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        time.sleep(0.1)
 
-@app.route('/video_feed')
-def video_feed():
-    return Response(generate_mjpeg(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+@app.get('/video')
+def video_feed() -> StreamingResponse:
+    return StreamingResponse(generate_mjpeg(), media_type='multipart/x-mixed-replace; boundary=frame')
 
-api_v1 = Blueprint('api_v1', __name__)
+api_v1 = APIRouter()
 
-def profile(func):
-    def wrapper(*args, **kwargs):
-        start = time.perf_counter()
-        result = func(*args, **kwargs)
-        end = time.perf_counter()
-        logging.info(f"[PROFILE] {func.__name__} executed in {end - start:.4f} seconds")
-        return result
-    return wrapper
-
-USERS = {}
-with open(os.path.join(os.path.dirname(__file__), '..', 'users.txt')) as f:
-    for line in f:
-        if line.strip():
-            username, password, role = line.strip().split(':')
-            USERS[username] = {'password': password, 'role': role}
-
-def check_auth(username, password):
-    user = USERS.get(username)
-    return user and user['password'] == password
-
-def get_role(username):
-    user = USERS.get(username)
-    return user['role'] if user else None
-
-def requires_role(required_role):
-    def decorator(f):
-        @wraps(f)
-        def decorated(*args, **kwargs):
-            auth = request.authorization
-            if not auth or not check_auth(auth.username, auth.password):
-                return jsonify({'error': 'Authentication required'}), 401
-            user_role = get_role(auth.username)
-            if user_role != required_role and user_role != 'admin':
-                return jsonify({'error': 'Insufficient permissions'}), 403
-            return f(*args, **kwargs)
-        return decorated
-    return decorator
-
-def log_incident(event, severity=None, location=None):
-    entry = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "event": event,
-        "severity": severity,
-        "location": location
-    }
-    with open(os.path.join(os.path.dirname(__file__), '..', 'incident_history.log'), 'a') as f:
-        f.write(json.dumps(entry) + '\n')
-
-@api_v1.route('/move', methods=['POST'])
-@profile
-def api_move():
-    data = request.json
+@api_v1.post('/move')
+async def api_move(request: Request, api_key: str = Depends(get_api_key)) -> dict:
+    data = await request.json()
     if not data or 'command' not in data:
-        return jsonify({'error': 'Missing command'}), 400
+        raise HTTPException(status_code=400, detail="Missing command")
     command = data['command']
     speed = data.get('speed', 1.0)
     angle = data.get('angle', 90)
 
     try:
-        if command == 'move_forward':
-            robot_controller.actuators.move_forward(speed)
-        elif command == 'move_backward':
-            robot_controller.actuators.move_backward(speed)
-        elif command == 'turn_left':
-            robot_controller.actuators.turn_left(angle)
-        elif command == 'turn_right':
-            robot_controller.actuators.turn_right(angle)
-        elif command == 'stop':
-            robot_controller.actuators.stop()
-        elif command == 'activate_water_pump':
-            robot_controller.actuators.activate_water_pump()
-        elif command == 'deactivate_water_pump':
-            robot_controller.actuators.deactivate_water_pump()
-        elif command == 'activate_extinguisher':
-            robot_controller.actuators.activate_extinguisher()
-        elif command == 'deactivate_extinguisher':
-            robot_controller.actuators.deactivate_extinguisher()
+        if command == 'forward':
+            # This is a simplified movement command. A real implementation would
+            # require more sophisticated logic to move the robot forward.
+            current_pose = robot_controller.slam.get_pose()
+            robot_controller.set_navigation_goal(current_pose[0], current_pose[1] + 1)
+            robot_controller.navigation.navigate()
+        elif command == 'backward':
+            current_pose = robot_controller.slam.get_pose()
+            robot_controller.set_navigation_goal(current_pose[0], current_pose[1] - 1)
+            robot_controller.navigation.navigate()
+        elif command == 'left':
+            current_pose = robot_controller.slam.get_pose()
+            robot_controller.set_navigation_goal(current_pose[0] - 1, current_pose[1])
+            robot_controller.navigation.navigate()
+        elif command == 'right':
+            current_pose = robot_controller.slam.get_pose()
+            robot_controller.set_navigation_goal(current_pose[0] + 1, current_pose[1])
+            robot_controller.navigation.navigate()
         elif command == 'start_auto_patrol':
             robot_controller.auto_patrol_enabled = True
-            logging.info("Auto-Patrol mode started via API.")
+            logger.info("Auto-Patrol mode started via API.")
         elif command == 'stop_auto_patrol':
             robot_controller.auto_patrol_enabled = False
-            robot_controller.actuators.stop()
-            logging.info("Auto-Patrol mode stopped via API.")
+            robot_controller.navigation.goal_position = None
+            logger.info("Auto-Patrol mode stopped via API.")
         else:
-            return jsonify({'error': 'Unknown command'}), 400
-        return jsonify({'status': 'success', 'command': command})
+            raise HTTPException(status_code=400, detail="Unknown command")
+        return {'status': 'success', 'command': command}
+    except HTTPException as e:
+        raise e
     except Exception as e:
-        logging.error(f"Error executing command {command}: {e}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error executing command {command}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@api_v1.route('/status')
-def api_status():
-    # Placeholder GPS coordinates and status
-    gps_location = {
-        'latitude': 37.7749,
-        'longitude': -122.4194
-    }
+
+@api_v1.get('/status')
+def api_status() -> dict:
+    # TODO: Replace with actual GPS data from a sensor
+    gps_location = {'latitude': 37.7749, 'longitude': -122.4194}
+    person_detected = any(obj['class_name'] == 'person' for obj in object_detector.detect_objects(current_frame) if current_frame is not None)
     status = {
         'gps': gps_location,
         'fire_severity': robot_controller.current_fire_severity,
-        'fire_location': robot_controller.fire_location
+        'fire_location': robot_controller.fire_location,
+        'person_detected': person_detected
     }
-    return jsonify(status)
+    return status
 
-@api_v1.route('/vision_detection', methods=['POST'])
-@profile
-def vision_detection():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+@api_v1.post('/vision_detection')
+async def vision_detection(file: UploadFile = File(...), api_key: str = Depends(get_api_key)) -> dict:
     try:
-        file_bytes = file.read()
+        file_bytes = await file.read()
         npimg = np.frombuffer(file_bytes, np.uint8)
         img = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
-        fire_detected = fire_detection.detect_fire(img)
+        
+        detected_objects = object_detector.detect_objects(img)
+        
+        fire_detected = any(obj['class_name'] == 'fire' for obj in detected_objects)
+        person_detected = any(obj['class_name'] == 'person' for obj in detected_objects)
+
         if fire_detected:
-            log_incident('fire_detected', severity='Unknown', location=[0,0])
-        objects = fire_detection.detect_objects(img)
+            log_incident('fire_detected', severity='Unknown', location=(0,0))
+        
+        if person_detected:
+            log_incident('person_detected', location=(0,0))
 
-        # Draw detection boxes on image
-        for det in objects:
-            x, y, w, h = det['box']
-            cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
-            label = f"{det['class_name']}: {det['confidence']:.2f}"
-            cv2.putText(img, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-
-        # Encode image with detections to base64
-        ret, jpeg = cv2.imencode('.jpg', img)
+        img_with_boxes = object_detector.draw_boxes(img, detected_objects)
+        ret, jpeg = cv2.imencode('.jpg', img_with_boxes)
         if not ret:
-            return jsonify({'error': 'Failed to encode image'}), 500
+            raise HTTPException(status_code=500, detail="Failed to encode image")
         image_with_detections = base64.b64encode(jpeg.tobytes()).decode('utf-8')
 
-        return jsonify({
+        return {
             'fire_detected': fire_detected,
-            'objects': objects,
+            'person_detected': person_detected,
+            'objects': detected_objects,
             'image_with_detections': image_with_detections
-        })
+        }
     except Exception as e:
-        logging.error(f"Error in vision_detection: {e}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error in vision_detection: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@api_v1.route('/incident_history')
-@requires_role('admin')
-def get_incident_history():
-    history = []
-    with open(os.path.join(os.path.dirname(__file__), '..', 'incident_history.log')) as f:
-        for line in f:
-            history.append(json.loads(line))
-    return jsonify(history)
+@api_v1.get('/incident_history')
+def get_incident_history() -> list:
+    return db_get_incident_history()
 
-@api_v1.route('/predictive_trends')
-@requires_role('admin')
-def get_predictive_trends():
-    # Simple trend: count incidents per day and average severity
+@api_v1.get('/predictive_trends')
+def get_predictive_trends() -> dict:
     from collections import Counter, defaultdict
-    import datetime
-    history = []
-    with open(os.path.join(os.path.dirname(__file__), '..', 'incident_history.log')) as f:
-        for line in f:
-            history.append(json.loads(line))
-    # Group by date
+    history = db_get_incident_history()
+    
     date_counts = Counter()
     severity_map = defaultdict(list)
     for entry in history:
-        if entry['timestamp']:
+        if entry.get('timestamp'):
             date = entry['timestamp'][:10]
             date_counts[date] += 1
-            if entry['severity'] and entry['severity'] != 'Unknown':
+            if entry.get('severity') and entry['severity'] != 'Unknown':
                 severity_map[date].append(entry['severity'])
-    # Convert severity to numeric for averaging (Low=1, Medium=2, High=3)
+
     severity_levels = {'Low': 1, 'Medium': 2, 'High': 3}
     avg_severity = {}
     for date, severities in severity_map.items():
         nums = [severity_levels.get(s, 0) for s in severities]
         avg_severity[date] = statistics.mean(nums) if nums else 0
-    return jsonify({
+    
+    return {
         'incidents_per_day': dict(date_counts),
         'avg_severity_per_day': avg_severity
-    })
+    }
 
-@api_v1.route('/admin_only')
-@requires_role('admin')
-def admin_only():
-    return jsonify({'message': 'Admin access granted'})
 
-@api_v1.route('/cloud/report_event', methods=['POST'])
-@requires_role('operator')
-def cloud_report_event():
-    # Placeholder: send event to cloud (e.g., AWS, Azure, GCP)
-    event = request.json
-    # Here you would integrate with cloud SDKs/APIs
-    logging.info(f"Reporting event to cloud: {event}")
-    return jsonify({'status': 'reported', 'event': event})
+@api_v1.post('/cloud/report_event')
+async def cloud_report_event(request: Request, api_key: str = Depends(get_api_key)) -> dict:
+    event = await request.json()
+    logger.info(f"Reporting event to cloud: {event}")
+    return {'status': 'reported', 'event': event}
 
-@api_v1.route('/cloud/notify', methods=['POST'])
-@requires_role('admin')
-def cloud_notify():
-    # Placeholder: send notification to remote users
-    notification = request.json
-    # Integrate with cloud notification services (SNS, FCM, etc.)
-    logging.info(f"Sending cloud notification: {notification}")
-    return jsonify({'status': 'notified', 'notification': notification})
+@api_v1.post('/cloud/notify')
+async def cloud_notify(request: Request, api_key: str = Depends(get_api_key)) -> dict:
+    notification = await request.json()
+    logger.info(f"Sending cloud notification: {notification}")
+    return {'status': 'notified', 'notification': notification}
 
-@api_v1.route('/cloud/robots', methods=['GET'])
-@requires_role('admin')
-def cloud_robots():
-    # Placeholder: return list of robots for multi-robot coordination
+@api_v1.get('/cloud/robots')
+def cloud_robots() -> dict:
     robots = [
         {'id': 'robot1', 'status': 'active'},
         {'id': 'robot2', 'status': 'idle'}
     ]
-    return jsonify({'robots': robots})
+    return {'robots': robots}
 
-@api_v1.route('/simulation/toggle', methods=['POST'])
-@requires_role('admin')
-def toggle_simulation():
-    # This would require a restart in real deployment, but here we just log
-    enabled = request.json.get('enabled', False)
-    logging.info(f"Simulation mode set to: {enabled}")
-    return jsonify({'simulation_mode': enabled, 'note': 'Set SIMULATION_MODE env var and restart for effect.'})
+@api_v1.get('/latest_heatmap')
+def get_latest_heatmap() -> dict:
+    # In a real application, this would return the path to the latest heatmap image
+    return {"url": "https://via.placeholder.com/640x480.png?text=Heatmap+Not+Available"}
+
+@api_v1.post('/simulation/toggle')
+async def toggle_simulation(request: Request, api_key: str = Depends(get_api_key)) -> dict:
+    data = await request.json()
+    enabled = data.get('enabled', False)
+    logger.info(f"Simulation mode set to: {enabled}")
+    return {'simulation_mode': enabled, 'note': 'Set SIMULATION_MODE env var and restart for effect.'}
 
 def self_heal():
-    # Example: check video stream, try to recover if failed
     if not video_capture.isOpened():
-        logging.warning("Video stream lost. Attempting recovery...")
+        logger.warning("Video stream lost. Attempting recovery...")
         try:
             if SIMULATION_MODE:
                 globals()['video_capture'] = SimulatedVideoCapture()
             else:
                 globals()['video_capture'] = cv2.VideoCapture(CAMERA_INDEX)
             if video_capture.isOpened():
-                logging.info("Video stream recovered.")
+                logger.info("Video stream recovered.")
             else:
-                logging.error("Video stream recovery failed.")
+                logger.error("Video stream recovery failed.")
         except Exception as e:
-            logging.error(f"Self-healing failed: {e}")
+            logger.error(f"Self-healing failed: {e}")
 
-@api_v1.route('/self_heal', methods=['POST'])
-@requires_role('admin')
-def api_self_heal():
+@api_v1.post('/self_heal')
+def api_self_heal(api_key: str = Depends(get_api_key)) -> dict:
     self_heal()
-    return jsonify({'status': 'self-heal attempted'})
+    return {'status': 'self-heal attempted'}
 
-# Register blueprint with version prefix
-app.register_blueprint(api_v1, url_prefix='/api/v1')
+from src.connection_manager import manager
 
-if __name__ == "__main__":
-    app.run(host=API_HOST, port=API_PORT, debug=DEBUG)
+async def broadcast_status():
+    while True:
+        await manager.broadcast(json.dumps(api_status()))
+        await asyncio.sleep(5)
+
+@app.on_event("startup")
+async def startup_event():
+    init_db()
+    asyncio.create_task(broadcast_status())
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+    finally:
+        manager.disconnect(websocket)
+
+app.include_router(api_v1, prefix="/api/v1")
+
+@app.post("/token")
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    # In a real application, you would validate the username and password against a database
+    if form_data.username == "admin" and form_data.password == "password":
+        return {"access_token": API_KEY, "token_type": "bearer"}
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+

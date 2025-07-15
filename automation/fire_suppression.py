@@ -1,15 +1,17 @@
-class FireSuppressionController:
-    def __init__(self, actuator_manager, navigation_controller, alert_manager):
-        self.actuator_manager = actuator_manager
-        self.navigation_controller = navigation_controller
-        self.alert_manager = alert_manager
+class FireSuppression:
+    def __init__(self):
+        from automation.actuator_manager import ActuatorManager
+        from alerts.alert_manager import AlertManager
+
+        self.actuator_manager = ActuatorManager()
+        self.alert_manager = AlertManager()
         self.suppression_active = False
 
-    def evaluate_fire_severity(self, fire_severity):
-        # Simple logic: activate suppression if severity is high
-        if fire_severity == "High" and not self.suppression_active:
+    def suppress_fire(self, fire_severity):
+        # Simple logic: activate suppression if severity is high or critical
+        if fire_severity in ["high", "critical"] and not self.suppression_active:
             self.activate_suppression()
-        elif fire_severity != "High" and self.suppression_active:
+        elif fire_severity not in ["high", "critical"] and self.suppression_active:
             self.deactivate_suppression()
 
     def activate_suppression(self):
@@ -31,13 +33,11 @@ class FireSuppressionController:
 
 if __name__ == "__main__":
     from automation.actuator_manager import ActuatorManager
-    from automation.navigation import NavigationController
     from alerts.alert_manager import AlertManager
 
     actuator_manager = ActuatorManager()
-    navigation_controller = NavigationController()
     alert_manager = AlertManager("sender@example.com", "password", "receiver@example.com")
 
-    fsc = FireSuppressionController(actuator_manager, navigation_controller, alert_manager)
+    fsc = FireSuppression()
     # Example usage
-    fsc.evaluate_fire_severity("High")
+    fsc.suppress_fire("high")

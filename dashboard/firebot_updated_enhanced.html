@@ -6,7 +6,6 @@
     <title>FireBot Command Center - Enhanced</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/socket.io-client/dist/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <style>
         /* Existing styles unchanged */
@@ -123,6 +122,12 @@
             <img id="heatmap-image" src="" alt="Heatmap Visualization" />
         </div>
 
+        <!-- Video Feed -->
+        <div class="mb-6">
+            <h2 class="text-xl font-bold mb-2">Live Camera Feed</h2>
+            <img id="video-feed" src="/video" alt="Live video feed from the robot's camera" class="bg-gray-800 rounded shadow w-full" width="640" height="480">
+        </div>
+
         <!-- Real-time Temperature Chart -->
         <div class="mb-6">
             <canvas id="realtime-temp-chart" width="400" height="120" class="bg-gray-800 rounded shadow"></canvas>
@@ -195,31 +200,34 @@
         });
 
         // WebSocket real-time updates
-        const socket = io();
+        const ws = new WebSocket(`ws://${window.location.host}/ws`);
 
-        socket.on('connect', () => {
+        ws.onopen = () => {
             console.log('Connected to WebSocket server');
-        });
+        };
 
-        socket.on('sensor_update', (data) => {
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
             // Update sensor values dynamically
-            document.getElementById('temp-value').textContent = data.temperature;
-            document.getElementById('flame-status').textContent = data.flameDetected ? 'DETECTED' : 'CLEAR';
-            document.getElementById('flame-status').className = data.flameDetected ? 'text-red-500 flame-animation' : 'text-green-500';
-            document.getElementById('gas-value').textContent = data.gasLevel;
-            document.getElementById('power-value').textContent = data.powerConsumption;
-
+            if (document.getElementById('temp-value')) {
+                document.getElementById('temp-value').textContent = data.temperature;
+            }
+            if (document.getElementById('flame-status')) {
+                document.getElementById('flame-status').textContent = data.flameDetected ? 'DETECTED' : 'CLEAR';
+                document.getElementById('flame-status').className = data.flameDetected ? 'text-red-500 flame-animation' : 'text-green-500';
+            }
+            if (document.getElementById('gas-value')) {
+                document.getElementById('gas-value').textContent = data.gasLevel;
+            }
+            if (document.getElementById('power-value')) {
+                document.getElementById('power-value').textContent = data.powerConsumption;
+            }
             // Update real-time temperature chart
-            updateTempChart(data.temperature);
-        });
+            if (data.temperature) {
+                updateTempChart(data.temperature);
+            }
+        };
 
-        socket.on('alert_update', (alert) => {
-            // Show alert badge or notification
-            const alertBadge = document.getElementById('alert-badge');
-            alertBadge.classList.remove('hidden');
-            alertBadge.title = alert.message;
-            // Additional UI alert logic can be added here
-        });
 
         // Real-time temperature chart
         const tempChartCtx = document.getElementById('realtime-temp-chart').getContext('2d');
@@ -257,17 +265,43 @@
         const loginBtn = document.getElementById('login-btn');
         const logoutBtn = document.getElementById('logout-btn');
         const authStatus = document.getElementById('auth-status');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+
         loginBtn.addEventListener('click', () => {
-            // Placeholder: send login request to backend
-            loginBtn.classList.add('hidden');
-            logoutBtn.classList.remove('hidden');
-            authStatus.textContent = 'Logged in';
+            const formData = new FormData();
+            formData.append('username', usernameInput.value);
+            formData.append('password', passwordInput.value);
+
+            fetch('/token', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Login failed');
+                }
+                return response.json();
+            })
+            .then(data => {
+                localStorage.setItem('accessToken', data.access_token);
+                loginBtn.classList.add('hidden');
+                logoutBtn.classList.remove('hidden');
+                authStatus.textContent = 'Logged in';
+                setRoleUI(usernameInput.value === 'admin' ? 'admin' : 'viewer');
+            })
+            .catch(error => {
+                console.error('Login error:', error);
+                authStatus.textContent = 'Login failed';
+            });
         });
+
         logoutBtn.addEventListener('click', () => {
-            // Placeholder: send logout request to backend
+            localStorage.removeItem('accessToken');
             loginBtn.classList.remove('hidden');
             logoutBtn.classList.add('hidden');
             authStatus.textContent = 'Logged out';
+            setRoleUI('viewer');
         });
 
         // Role-based UI logic
@@ -295,12 +329,54 @@
         setRoleUI(currentRole);
 
         // Analytics panel logic (placeholder)
-        document.getElementById('view-incident-history').onclick = () => {
-            alert('Incident history feature coming soon!');
-        };
-        document.getElementById('view-predictive-trends').onclick = () => {
-            alert('Predictive trends feature coming soon!');
-        };
+        document.getElementById('view-incident-history').addEventListener('click', () => {
+            fetch('/api/v1/incident_history')
+                .then(response => response.json())
+                .then(data => {
+                    const history = data.map(item => `<p>${item.timestamp}: ${item.event} - Severity: ${item.severity}</p>`).join('');
+                    showModal('Incident History', history);
+                })
+                .catch(err => console.error('Error fetching incident history:', err));
+        });
+
+        document.getElementById('view-predictive-trends').addEventListener('click', () => {
+            fetch('/api/v1/predictive_trends')
+                .then(response => response.json())
+                .then(data => {
+                    const trends = `<p>Incidents per day: ${JSON.stringify(data.incidents_per_day)}</p><p>Avg severity per day: ${JSON.stringify(data.avg_severity_per_day)}</p>`;
+                    showModal('Predictive Trends', trends);
+                })
+                .catch(err => console.error('Error fetching predictive trends:', err));
+        });
+
+        function showModal(title, content) {
+            const modal = document.createElement('div');
+            modal.style.position = 'fixed';
+            modal.style.top = '0';
+            modal.style.left = '0';
+            modal.style.width = '100%';
+            modal.style.height = '100%';
+            modal.style.backgroundColor = 'rgba(0,0,0,0.7)';
+            modal.style.display = 'flex';
+            modal.style.justifyContent = 'center';
+            modal.style.alignItems = 'center';
+            modal.style.zIndex = '1001';
+
+            const modalContent = document.createElement('div');
+            modalContent.style.backgroundColor = 'white';
+            modalContent.style.color = 'black';
+            modalContent.style.padding = '20px';
+            modalContent.style.borderRadius = '5px';
+            modalContent.innerHTML = `<h2>${title}</h2>${content}`;
+
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = 'Close';
+            closeBtn.onclick = () => modal.remove();
+            modalContent.appendChild(closeBtn);
+
+            modal.appendChild(modalContent);
+            document.body.appendChild(modal);
+        }
 
         // Localization/i18n logic (simple demo)
         const translations = {

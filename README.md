@@ -1,6 +1,6 @@
 # Fire Severity Prediction Project
 
-This project trains a machine learning model to predict fire severity based on sensor data such as temperature, smoke density, gas level, and humidity. It includes scripts for training the model, making predictions, a REST API for real-time prediction, visualization utilities, and a GUI application.
+This project trains a machine learning model to predict fire severity based on sensor data such as temperature, smoke density, gas level, and humidity. It includes scripts for training the model, making predictions, a REST API for real-time prediction, and visualization utilities.
 
 ## Project Structure
 
@@ -8,11 +8,10 @@ This project trains a machine learning model to predict fire severity based on s
 Fire_Fighting_Humanoid_Robot/
 │
 ├── src/
+│   ├── api.py                   # FastAPI REST API for real-time prediction
 │   ├── train_fire_model.py       # Training script
 │   ├── predict_fire.py           # Prediction script (supports CLI and batch prediction)
-│   ├── api.py                   # FastAPI REST API for real-time prediction
-│   ├── visualization.py         # Visualization utilities for data and model
-│   └── fire_gui_app.py          # Tkinter GUI application for fire severity prediction
+│   └── visualization.py         # Visualization utilities for data and model
 │
 ├── data/
 │   └── fire_data_bangladesh.csv  # Dataset
@@ -28,7 +27,8 @@ Fire_Fighting_Humanoid_Robot/
 ├── .gitignore
 ├── README.md
 ├── requirements.txt
-└── venv/                        # Virtual environment (ignored)
+├── main.py                      # Main entry point for the application
+└── docker-compose.yml
 ```
 
 ## Requirements
@@ -77,10 +77,16 @@ Use the visualization utilities to explore data distributions, fire severity cou
 Start the FastAPI server:
 
 ```bash
+python main.py
+```
+
+Or with auto-reload for development:
+
+```bash
 uvicorn src.api:app --reload
 ```
 
-Send POST requests to `http://localhost:8000/predict` with JSON body:
+Send POST requests to `http://localhost:8000/api/v1/predict` with JSON body:
 
 ```json
 {
@@ -99,17 +105,18 @@ Response:
 }
 ```
 
-### GUI Application
+## User Management
 
-Run the Tkinter GUI application to input sensor data and get fire severity predictions via the API:
+To add a new user to the system, run the `scripts/hash_password.py` script and follow the prompts:
 
 ```bash
-python src/fire_gui_app.py
+python scripts/hash_password.py
 ```
+
+This will securely hash the password and add the new user to the `users.txt` file.
 
 ## Notes
 
 - Ensure the dataset file is in the `data/` directory.
 - The trained model and label encoder files must be present in the `models/` directory to run predictions.
 - The confusion matrix and feature importance images will be saved in the `results/` directory after training.
-- The API server must be running to use the GUI application.

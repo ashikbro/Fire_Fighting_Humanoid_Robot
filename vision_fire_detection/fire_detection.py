@@ -1,142 +1,45 @@
+import logging
 import cv2
 import numpy as np
-from vision_fire_detection.detect_fire_from_image import FireDetector
-import os
-import logging
-from tensorflow.keras.models import load_model
-from sklearn.preprocessing import StandardScaler
-import numpy as np
-import time
-
-from vision_fire_detection.object_detection import ObjectDetector
-
-def profile(func):
-    def wrapper(*args, **kwargs):
-        start = time.perf_counter()
-        result = func(*args, **kwargs)
-        end = time.perf_counter()
-        logging.info(f"[PROFILE] {func.__name__} executed in {end - start:.4f} seconds")
-        return result
-    return wrapper
+import tensorflow as tf
 
 class FireDetection:
-    def __init__(self, method: str = 'color_threshold', enable_object_detection: bool = False) -> None:
-        self.method = method
-        self.enable_object_detection = enable_object_detection
-        if self.method == 'cnn':
-            try:
-                from vision_fire_detection.detect_fire_from_image import FireDetector
-                self.detector = FireDetector()
-            except ImportError:
-                logging.warning("TensorFlow not installed, falling back to color threshold method.")
-                self.detector = None
-                self.method = 'color_threshold'
-        else:
-            self.detector = None
-
-        # Load fire severity deep learning model
-        dl_model_path = os.path.join(os.path.dirname(__file__), '..', 'models', 'fire_severity_model_DeepLearning.h5')
+    def __init__(self, model_path='models/fire_detection_model.h5', enable_object_detection=True):
+        logging.info("Initializing FireDetection...")
         try:
-            self.severity_model = load_model(dl_model_path)
-            self.scaler = StandardScaler()
-            self.severity_model_loaded = True
+            self.model = tf.keras.models.load_model(model_path)
+            logging.info("Fire detection model loaded successfully.")
         except Exception as e:
-            logging.error(f"Failed to load fire severity model: {e}")
-            self.severity_model = None
-            self.scaler = None
-            self.severity_model_loaded = False
+            self.model = None
+            logging.error(f"Error loading fire detection model: {e}")
 
-        if self.enable_object_detection:
-            self.object_detector = ObjectDetector()
-        else:
-            self.object_detector = None
+        self.object_detection_model = None
+        if enable_object_detection:
+            # In a real implementation, you would load a model like YOLOv5 here
+            logging.info("Object detection is enabled (placeholder).")
 
-    @profile
-    def detect_fire(self, frame: np.ndarray) -> bool:
+    def detect_fire(self, frame):
+        if self.model is None:
+            return False
+        
         try:
-            if self.method == 'cnn' and self.detector is not None:
-                return self.detector.detect_fire(frame)
-            else:
-                hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-                lower_fire = np.array([0, 150, 150])
-                upper_fire = np.array([35, 255, 255])
-                mask = cv2.inRange(hsv, lower_fire, upper_fire)
-                fire_pixels = cv2.countNonZero(mask)
-                return fire_pixels > 500
+            # Preprocess the frame for the model
+            img = cv2.resize(frame, (224, 224))
+            img_array = tf.keras.preprocessing.image.img_to_array(img)
+            img_array = np.expand_dims(img_array, axis=0)
+
+            # Perform inference
+            prediction = self.model.predict(img_array)
+            
+            # The prediction is a probability. We can set a threshold to decide if it's a fire.
+            is_fire = prediction[0][0] > 0.5
+            if is_fire:
+                logging.info("Fire detected!")
+            return is_fire
         except Exception as e:
-            logging.error(f"Error in detect_fire: {e}")
+            logging.error(f"Error during fire detection: {e}")
             return False
 
-    @profile
-    def detect_objects(self, frame: np.ndarray) -> list:
-        try:
-            if self.object_detector:
-                return self.object_detector.detect_objects(frame)
-            else:
-                return []
-        except Exception as e:
-            logging.error(f"Error in detect_objects: {e}")
-            return []
-
-    @profile
-    def predict_fire_severity(self, sensor_data: dict) -> str | None:
-        if not self.severity_model_loaded:
-            logging.warning("Fire severity model not loaded.")
-            return None
-        try:
-            features = np.array([[sensor_data['Temperature'], sensor_data['SmokeDensity'], sensor_data['GasLevel'], sensor_data['Humidity']]])
-            features_scaled = self.scaler.fit_transform(features)
-            y_pred_prob = self.severity_model.predict(features_scaled)
-            y_pred = np.argmax(y_pred_prob, axis=1)
-            severity_labels = ['Low', 'Medium', 'High']
-            severity = severity_labels[y_pred[0]] if y_pred[0] < len(severity_labels) else "Unknown"
-            return severity
-        except Exception as e:
-            logging.error(f"Error predicting fire severity: {e}")
-            return None
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    cap = cv2.VideoCapture(0)  # Use default camera
-    if not cap.isOpened():
-        logging.error("Error: Could not open video stream.")
-        exit()
-
-    # Change method to 'cnn' to use the deep learning model, enable object detection as well
-    fire_detector = FireDetection(method='cnn', enable_object_detection=True)
-
-    # Example sensor data for severity prediction (replace with real sensor input)
-    example_sensor_data = {
-        'Temperature': 35.0,
-        'SmokeDensity': 200.0,
-        'GasLevel': 50.0,
-        'Humidity': 40.0
-    }
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        fire_detected = fire_detector.detect_fire(frame)
-        if fire_detected:
-            logging.info("Fire detected!")
-            severity = fire_detector.predict_fire_severity(example_sensor_data)
-            if severity:
-                logging.info(f"Predicted Fire Severity: {severity}")
-        else:
-            logging.info("No fire detected.")
-
-        detections = fire_detector.detect_objects(frame)
-        for det in detections:
-            x, y, w, h = det['box']
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-            label = f"{det['class_name']}: {det['confidence']:.2f}"
-            cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-
-        cv2.imshow("Fire and Object Detection", frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
+    def detect_objects(self, camera_data):
+        # Placeholder for object detection
+        return []
