@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fire Fighting Robot Control</title>
+    <style>
+        body { font-family: sans-serif; }
+        #video-container { border: 1px solid black; width: 640px; height: 480px; }
+        .controls button { margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Fire Fighting Robot Control</h1>
+    <div id="video-container">
+        <img id="video-feed" src="http://localhost:8000/video" width="640" height="480">
+    </div>
+    <div class="controls">
+        <button onclick="sendCommand('forward')">Forward</button>
+        <button onclick="sendCommand('backward')">Backward</button>
+        <button onclick="sendCommand('left')">Left</button>
+        <button onclick="sendCommand('right')">Right</button>
+        <button onclick="sendCommand('start_auto_patrol')">Start Patrol</button>
+        <button onclick="sendCommand('stop_auto_patrol')">Stop Patrol</button>
+    </div>
+    <script>
+        async function sendCommand(command) {
+            try {
+                const response = await fetch('http://localhost:8000/api/v1/move', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer your_secret_api_key'
+                    },
+                    body: JSON.stringify({ command: command })
+                });
+                const data = await response.json();
+                console.log(data);
+            } catch (error) {
+                console.error('Error sending command:', error);
+            }
+        }
+    </script>
+</body>
+</html>

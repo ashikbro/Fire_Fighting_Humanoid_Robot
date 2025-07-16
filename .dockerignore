@@ -1,22 +1,7 @@
-# Git
-.git
-.gitignore
-.gitattributes
-
-# Docker
-.dockerignore
-Dockerfile
-docker-compose.yml
-
-# Python
+venv/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-env/
-venv/
-
-# Other
-.idea/
+.pytest_cache/
 .vscode/

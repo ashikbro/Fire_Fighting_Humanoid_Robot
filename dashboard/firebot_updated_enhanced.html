@@ -125,7 +125,7 @@
         <!-- Video Feed -->
         <div class="mb-6">
             <h2 class="text-xl font-bold mb-2">Live Camera Feed</h2>
-            <img id="video-feed" src="/video" alt="Live video feed from the robot's camera" class="bg-gray-800 rounded shadow w-full" width="640" height="480">
+            <img id="video-feed" alt="Live video feed from the robot's camera" class="bg-gray-800 rounded shadow w-full" width="640" height="480">
         </div>
 
         <!-- Real-time Temperature Chart -->
@@ -228,6 +228,9 @@
             }
         };
 
+// Reload the video feed to ensure it's live
+        const videoFeed = document.getElementById('video-feed');
+        videoFeed.src = "/video?t=" + new Date().getTime();
 
         // Real-time temperature chart
         const tempChartCtx = document.getElementById('realtime-temp-chart').getContext('2d');

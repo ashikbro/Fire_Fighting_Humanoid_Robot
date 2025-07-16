@@ -95,7 +95,8 @@ class NavigationController:
         x, y = pos
         if not (0 <= x < self.slam.map_size and 0 <= y < self.slam.map_size):
             return False
-        if self.slam.get_map()[x, y] == 1:  # Occupied
+        # Fix indexing: numpy arrays are accessed as [row, col] = [y, x]
+        if self.slam.get_map()[y, x] == 1:  # Occupied
             return False
         return True
 

@@ -21,3 +21,4 @@ API_KEY = os.getenv("API_KEY", "your_secret_api_key")
 # Robot settings
 SIMULATION_MODE = os.getenv("SIMULATION_MODE", "True").lower() in ("true", "1", "t")
 CAMERA_INDEX = int(os.getenv("CAMERA_INDEX", 0))
+YOLO_MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "runs/detect/train/weights/best.pt")

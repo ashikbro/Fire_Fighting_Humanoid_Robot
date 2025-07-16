@@ -139,3 +139,29 @@ vision_fire_detection/
         (fire images here)
       non_fire/
         (non-fire images here)
+
+# Exclude the src directory
+src/
+
+# Exclude log files
+*.log
+
+# Prevent empty files from being committed
+**/__init__.py
+!app/api/__init__.py
+!app/core/__init__.py
+!app/db/__init__.py
+
+# Mobile app auto-generated files
+mobile_app/.metadata
+mobile_app/pubspec.lock
+mobile_app/android/.gradle/
+mobile_app/ios/.symlinks/
+mobile_app/ios/Flutter/Flutter.framework
+mobile_app/ios/Flutter/Flutter.podspec
+
+# Temporary and backup files
+*.tmp
+*.bak
+*.old
+*~
