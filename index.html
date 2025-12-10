@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fire Fighting Humanoid Robot - Projects</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        .card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        .flame-icon {
+            animation: flame 2s ease-in-out infinite alternate;
+        }
+        @keyframes flame {
+            0% { opacity: 0.8; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1.1); }
+        }
+    </style>
+</head>
+<body class="p-8">
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-12">
+            <div class="flex items-center justify-center mb-4">
+                <i class="fas fa-fire flame-icon text-6xl text-orange-500 mr-4"></i>
+                <h1 class="text-5xl font-bold text-white">Fire Fighting Humanoid Robot</h1>
+            </div>
+            <p class="text-xl text-white opacity-90">Project Dashboards & Interfaces</p>
+        </div>
+
+        <!-- Project Cards -->
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-8">
+            <!-- Enhanced Dashboard -->
+            <div class="card bg-white rounded-xl shadow-xl overflow-hidden">
+                <div class="bg-gradient-to-r from-orange-500 to-red-600 p-6">
+                    <i class="fas fa-fire-extinguisher text-4xl text-white mb-2"></i>
+                    <h2 class="text-2xl font-bold text-white">Enhanced Dashboard</h2>
+                </div>
+                <div class="p-6">
+                    <p class="text-gray-600 mb-4">Advanced command center with real-time monitoring, camera feed, sensor data, and enhanced controls.</p>
+                    <ul class="text-sm text-gray-500 mb-4 space-y-1">
+                        <li>✓ Live Camera Feed</li>
+                        <li>✓ Real-time Sensor Data</li>
+                        <li>✓ Enhanced Controls</li>
+                        <li>✓ Detection History</li>
+                        <li>✓ System Logs</li>
+                    </ul>
+                    <a href="dashboard/firebot_updated_enhanced.html" 
+                       class="block w-full text-center bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 rounded-lg font-semibold hover:from-orange-600 hover:to-red-700 transition-all">
+                        Open Enhanced Dashboard <i class="fas fa-arrow-right ml-2"></i>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Updated Dashboard -->
+            <div class="card bg-white rounded-xl shadow-xl overflow-hidden">
+                <div class="bg-gradient-to-r from-blue-500 to-indigo-600 p-6">
+                    <i class="fas fa-robot text-4xl text-white mb-2"></i>
+                    <h2 class="text-2xl font-bold text-white">Updated Dashboard</h2>
+                </div>
+                <div class="p-6">
+                    <p class="text-gray-600 mb-4">Updated command center interface with robot status monitoring and control capabilities.</p>
+                    <ul class="text-sm text-gray-500 mb-4 space-y-1">
+                        <li>✓ Robot Status</li>
+                        <li>✓ Control Panel</li>
+                        <li>✓ Sensor Monitoring</li>
+                        <li>✓ Detection System</li>
+                        <li>✓ Activity Logs</li>
+                    </ul>
+                    <a href="dashboard/firebot_updated.html" 
+                       class="block w-full text-center bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all">
+                        Open Updated Dashboard <i class="fas fa-arrow-right ml-2"></i>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Original Dashboard -->
+            <div class="card bg-white rounded-xl shadow-xl overflow-hidden">
+                <div class="bg-gradient-to-r from-purple-500 to-pink-600 p-6">
+                    <i class="fas fa-tachometer-alt text-4xl text-white mb-2"></i>
+                    <h2 class="text-2xl font-bold text-white">Original Dashboard</h2>
+                </div>
+                <div class="p-6">
+                    <p class="text-gray-600 mb-4">Classic FireBot command center interface with core monitoring and control features.</p>
+                    <ul class="text-sm text-gray-500 mb-4 space-y-1">
+                        <li>✓ Basic Controls</li>
+                        <li>✓ Sensor Readings</li>
+                        <li>✓ Fire Detection</li>
+                        <li>✓ Status Display</li>
+                        <li>✓ Command Interface</li>
+                    </ul>
+                    <a href="dashboard/firebot.html" 
+                       class="block w-full text-center bg-gradient-to-r from-purple-500 to-pink-600 text-white py-3 rounded-lg font-semibold hover:from-purple-600 hover:to-pink-700 transition-all">
+                        Open Original Dashboard <i class="fas fa-arrow-right ml-2"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Project Info -->
+        <div class="bg-white bg-opacity-95 rounded-xl shadow-xl p-8 mb-8">
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-info-circle text-blue-500 mr-2"></i>
+                About the Project
+            </h3>
+            <p class="text-gray-700 mb-4">
+                The Fire Fighting Humanoid Robot is an intelligent system designed to detect and respond to fire emergencies. 
+                It uses machine learning to predict fire severity based on sensor data including temperature, smoke density, 
+                gas levels, and humidity.
+            </p>
+            <div class="grid md:grid-cols-2 gap-4 mt-6">
+                <div class="flex items-start">
+                    <i class="fas fa-microchip text-2xl text-indigo-500 mr-3 mt-1"></i>
+                    <div>
+                        <h4 class="font-semibold text-gray-800">AI-Powered Detection</h4>
+                        <p class="text-sm text-gray-600">Machine learning model for fire severity prediction</p>
+                    </div>
+                </div>
+                <div class="flex items-start">
+                    <i class="fas fa-camera text-2xl text-green-500 mr-3 mt-1"></i>
+                    <div>
+                        <h4 class="font-semibold text-gray-800">Real-time Monitoring</h4>
+                        <p class="text-sm text-gray-600">Live camera feed and sensor data visualization</p>
+                    </div>
+                </div>
+                <div class="flex items-start">
+                    <i class="fas fa-chart-line text-2xl text-orange-500 mr-3 mt-1"></i>
+                    <div>
+                        <h4 class="font-semibold text-gray-800">Analytics Dashboard</h4>
+                        <p class="text-sm text-gray-600">Comprehensive data visualization and reporting</p>
+                    </div>
+                </div>
+                <div class="flex items-start">
+                    <i class="fas fa-shield-alt text-2xl text-red-500 mr-3 mt-1"></i>
+                    <div>
+                        <h4 class="font-semibold text-gray-800">Safety First</h4>
+                        <p class="text-sm text-gray-600">Automated fire detection and response system</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center text-white">
+            <p class="mb-2">
+                <a href="https://github.com/ashikbro/Fire_Fighting_Humanoid_Robot" 
+                   target="_blank" 
+                   rel="noopener noreferrer"
+                   class="inline-flex items-center hover:text-gray-200 transition-colors">
+                    <i class="fab fa-github text-2xl mr-2"></i>
+                    View on GitHub
+                </a>
+            </p>
+            <p class="text-sm opacity-75">Fire Fighting Humanoid Robot © 2024</p>
+        </div>
+    </div>
+</body>
+</html>
