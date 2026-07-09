@@ -25,6 +25,8 @@ API_PORT = int(os.getenv('API_PORT', 5000))
 DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes')
 CAMERA_INDEX = int(os.getenv('CAMERA_INDEX', 0))
 SIMULATION_MODE = os.getenv('SIMULATION_MODE', 'False').lower() in ('true', '1', 'yes')
+CAPTURE_POLL_INTERVAL_SEC = float(os.getenv('CAPTURE_POLL_INTERVAL_SEC', 0.01))
+MJPEG_STREAM_FPS = max(float(os.getenv('MJPEG_STREAM_FPS', 10.0)), 0.1)
 
 app = Flask(__name__)
 
@@ -52,6 +54,7 @@ else:
 
 # Lock for thread-safe frame access
 frame_lock = threading.Lock()
+frame_ready = threading.Condition(frame_lock)
 current_frame = None
 
 def safe_read_frame(video_capture, frame_lock):
@@ -70,7 +73,10 @@ def capture_frames():
     while True:
         frame = safe_read_frame(video_capture, frame_lock)
         if frame is not None:
-            current_frame = frame
+            with frame_ready:
+                current_frame = frame
+                frame_ready.notify_all()
+        time.sleep(CAPTURE_POLL_INTERVAL_SEC)
 
 # Start frame capture thread
 capture_thread = threading.Thread(target=capture_frames)
@@ -78,18 +84,26 @@ capture_thread.daemon = True
 capture_thread.start()
 
 def generate_mjpeg():
+    frame_interval_sec = 1.0 / MJPEG_STREAM_FPS
+    last_sent = 0.0
     while True:
-        with frame_lock:
-            if current_frame is None:
+        with frame_ready:
+            while current_frame is None:
+                frame_ready.wait(timeout=frame_interval_sec)
+            frame = current_frame.copy()
+        now = time.perf_counter()
+        elapsed = now - last_sent
+        if elapsed < frame_interval_sec:
+            time.sleep(frame_interval_sec - elapsed)
+        last_sent = time.perf_counter()
+        try:
+            ret, jpeg = cv2.imencode('.jpg', frame)
+            if not ret:
                 continue
-            try:
-                ret, jpeg = cv2.imencode('.jpg', current_frame)
-                if not ret:
-                    continue
-                frame_bytes = jpeg.tobytes()
-            except Exception as e:
-                logging.error(f"MJPEG encoding error: {e}")
-                continue
+            frame_bytes = jpeg.tobytes()
+        except Exception as e:
+            logging.error(f"MJPEG encoding error: {e}")
+            continue
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
