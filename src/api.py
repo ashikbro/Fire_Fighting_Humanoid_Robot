@@ -100,7 +100,15 @@ def video_feed():
 
 api_v1 = Blueprint('api_v1', __name__)
 
+PREDICT_FIELD_ALIASES = {
+    'Temperature': ('Temperature', 'temperature'),
+    'SmokeDensity': ('SmokeDensity', 'smoke_density'),
+    'GasLevel': ('GasLevel', 'gas_level'),
+    'Humidity': ('Humidity', 'humidity'),
+}
+
 def profile(func):
+    @wraps(func)
     def wrapper(*args, **kwargs):
         start = time.perf_counter()
         result = func(*args, **kwargs)
@@ -109,11 +117,31 @@ def profile(func):
         return result
     return wrapper
 
+def parse_sensor_data(payload):
+    if not isinstance(payload, dict):
+        return None, 'Invalid JSON payload'
+
+    sensor_data = {}
+    for canonical_key, aliases in PREDICT_FIELD_ALIASES.items():
+        value = None
+        for key in aliases:
+            if key in payload:
+                value = payload[key]
+                break
+        if value is None:
+            return None, f'Missing field: {canonical_key}'
+        try:
+            sensor_data[canonical_key] = float(value)
+        except (TypeError, ValueError):
+            return None, f'Invalid numeric value for: {canonical_key}'
+    return sensor_data, None
+
 USERS = {}
 with open(os.path.join(os.path.dirname(__file__), '..', 'users.txt')) as f:
     for line in f:
-        if line.strip():
-            username, password, role = line.strip().split(':')
+        stripped_line = line.strip()
+        if stripped_line and not stripped_line.startswith('#'):
+            username, password, role = stripped_line.split(':')
             USERS[username] = {'password': password, 'role': role}
 
 def check_auth(username, password):
@@ -190,6 +218,16 @@ def api_move():
     except Exception as e:
         logging.error(f"Error executing command {command}: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/predict', methods=['POST'])
+@profile
+def predict():
+    payload = request.get_json(silent=True)
+    sensor_data, error = parse_sensor_data(payload)
+    if error:
+        return jsonify({'error': error}), 400
+    severity = fire_detection.predict_fire_severity(sensor_data)
+    return jsonify({'fire_severity': severity or 'Unknown'})
 
 @api_v1.route('/status')
 def api_status():
