@@ -22,6 +22,17 @@ stream_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 logger.addHandler(stream_handler)
 
+MODEL = None
+LABEL_ENCODER = None
+
+def get_models():
+    """Load and cache model and label encoder to avoid repeated disk loads."""
+    global MODEL, LABEL_ENCODER
+    if MODEL is None or LABEL_ENCODER is None:
+        MODEL = joblib.load("models/fire_severity_model.pkl")
+        LABEL_ENCODER = joblib.load("models/label_encoder.pkl")
+    return MODEL, LABEL_ENCODER
+
 def get_sensor_input():
     print("Enter sensor values for prediction:")
     while True:
@@ -48,18 +59,17 @@ def batch_predict(input_csv, output_csv):
             print("Error: Input CSV missing required columns.")
             return
         X = df[features].values
-    except Exception as e:
-        logger.error(f"Error reading input CSV: {e}")
-        print(f"Error reading input CSV: {e}")
-        return
+        except Exception as e:
+            logger.error(f"Error reading input CSV: {e}")
+            print(f"Error reading input CSV: {e}")
+            return
 
-    try:
-        model = joblib.load("models/fire_severity_model.pkl")
-        label_encoder = joblib.load("models/label_encoder.pkl")
-    except Exception as e:
-        logger.error(f"Error loading model or encoder: {e}")
-        print(f"Error loading model or encoder: {e}")
-        return
+        try:
+            model, label_encoder = get_models()
+        except Exception as e:
+            logger.error(f"Error loading model or encoder: {e}")
+            print(f"Error loading model or encoder: {e}")
+            return
 
     try:
         predictions = model.predict(X)
@@ -90,8 +100,7 @@ def main():
     else:
         sample_data = get_sensor_input()
         try:
-            model = joblib.load("models/fire_severity_model.pkl")
-            label_encoder = joblib.load("models/label_encoder.pkl")
+            model, label_encoder = get_models()
         except Exception as e:
             logger.error(f"Error loading model or encoder: {e}")
             print(f"Error loading model or encoder: {e}")
