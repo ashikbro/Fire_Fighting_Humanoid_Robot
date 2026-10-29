@@ -72,32 +72,44 @@ The output CSV will contain an additional column `PredictedFireSeverity`.
 
 Use the visualization utilities to explore data distributions, fire severity counts, feature importance, and ROC curves. You can import and call functions from `src/visualization.py` in your scripts or interactive sessions.
 
-### Real-time Prediction API
+### Real-time Robot API
 
-Start the FastAPI server:
+The API is a Flask application. Start it with:
 
 ```bash
-uvicorn src.api:app --reload
+python src/api.py
 ```
 
-Send POST requests to `http://localhost:8000/predict` with JSON body:
+The server listens on `http://127.0.0.1:5000` by default. Configure `API_HOST`,
+`API_PORT`, `SIMULATION_MODE`, and other settings in a local `.env` file.
+
+Send movement commands to `http://localhost:5000/api/v1/move`:
 
 ```json
 {
-  "temperature": 55.0,
-  "smoke_density": 120.0,
-  "gas_level": 450.0,
-  "humidity": 25.0
+  "command": "stop"
 }
 ```
 
-Response:
+Protected endpoints use HTTP Basic Authentication. Create a local `users.txt`
+from `users.example.txt`; credentials are intentionally not committed. Passwords
+must be Werkzeug password hashes, not plaintext. Generate one with:
 
-```json
-{
-  "fire_severity": "Moderate"
-}
+```bash
+python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your-password'))"
 ```
+
+The unauthenticated health endpoint is available at
+`GET /api/v1/health`. Docker Compose runs the service in simulation mode and
+uses this endpoint for its container health check.
+
+### Docker
+
+```bash
+docker compose up --build
+```
+
+The container exposes the API on port `5000`.
 
 ### GUI Application
 

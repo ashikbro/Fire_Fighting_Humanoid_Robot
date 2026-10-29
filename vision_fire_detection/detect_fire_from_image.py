@@ -1,10 +1,9 @@
 import cv2
 import numpy as np
-import tensorflow as tf
-from tensorflow.keras.models import load_model
 
 class FireDetector:
     def __init__(self, model_path='vision_fire_detection/fire_detection_cnn.h5'):
+        from tensorflow.keras.models import load_model
         self.model = load_model(model_path)
         self.input_size = (128, 128)
 

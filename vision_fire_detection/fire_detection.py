@@ -3,7 +3,6 @@ import numpy as np
 from vision_fire_detection.detect_fire_from_image import FireDetector
 import os
 import logging
-from tensorflow.keras.models import load_model
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 import time
@@ -24,27 +23,43 @@ class FireDetection:
         self.method = method
         self.enable_object_detection = enable_object_detection
         if self.method == 'cnn':
-            try:
-                from vision_fire_detection.detect_fire_from_image import FireDetector
-                self.detector = FireDetector()
-            except ImportError:
-                logging.warning("TensorFlow not installed, falling back to color threshold method.")
+            cnn_model_path = os.path.join(os.path.dirname(__file__), 'fire_detection_cnn.h5')
+            if not os.path.exists(cnn_model_path):
+                logging.warning("CNN fire detector model not found at %s; using color threshold method.", cnn_model_path)
                 self.detector = None
                 self.method = 'color_threshold'
+            else:
+                try:
+                    from vision_fire_detection.detect_fire_from_image import FireDetector
+                    self.detector = FireDetector(cnn_model_path)
+                except Exception as exc:
+                    logging.warning(
+                        "CNN fire detector unavailable (%s); falling back to color threshold method.",
+                        exc,
+                    )
+                    self.detector = None
+                    self.method = 'color_threshold'
         else:
             self.detector = None
 
         # Load fire severity deep learning model
         dl_model_path = os.path.join(os.path.dirname(__file__), '..', 'models', 'fire_severity_model_DeepLearning.h5')
-        try:
-            self.severity_model = load_model(dl_model_path)
-            self.scaler = StandardScaler()
-            self.severity_model_loaded = True
-        except Exception as e:
-            logging.error(f"Failed to load fire severity model: {e}")
+        if not os.path.exists(dl_model_path):
+            logging.warning("Fire severity model not found at %s; using sensor-only fallback.", dl_model_path)
             self.severity_model = None
             self.scaler = None
             self.severity_model_loaded = False
+        else:
+            try:
+                from tensorflow.keras.models import load_model
+                self.severity_model = load_model(dl_model_path)
+                self.scaler = StandardScaler()
+                self.severity_model_loaded = True
+            except Exception as exc:
+                logging.error("Failed to load fire severity model: %s", exc)
+                self.severity_model = None
+                self.scaler = None
+                self.severity_model_loaded = False
 
         if self.enable_object_detection:
             self.object_detector = ObjectDetector()

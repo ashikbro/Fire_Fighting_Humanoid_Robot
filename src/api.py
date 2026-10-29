@@ -11,6 +11,7 @@ from functools import wraps
 import json
 from datetime import datetime
 import statistics
+from werkzeug.security import check_password_hash
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from automation.robot_controller import RobotController
@@ -25,6 +26,11 @@ API_PORT = int(os.getenv('API_PORT', 5000))
 DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes')
 CAMERA_INDEX = int(os.getenv('CAMERA_INDEX', 0))
 SIMULATION_MODE = os.getenv('SIMULATION_MODE', 'False').lower() in ('true', '1', 'yes')
+DISABLE_CAMERA_THREAD = os.getenv('DISABLE_CAMERA_THREAD', 'False').lower() in ('true', '1', 'yes')
+AUTH_USERS_FILE = os.getenv(
+    'AUTH_USERS_FILE',
+    os.path.join(os.path.dirname(__file__), '..', 'users.txt'),
+)
 
 app = Flask(__name__)
 
@@ -73,9 +79,10 @@ def capture_frames():
             current_frame = frame
 
 # Start frame capture thread
-capture_thread = threading.Thread(target=capture_frames)
-capture_thread.daemon = True
-capture_thread.start()
+capture_thread = None
+if not DISABLE_CAMERA_THREAD:
+    capture_thread = threading.Thread(target=capture_frames, daemon=True)
+    capture_thread.start()
 
 def generate_mjpeg():
     while True:
@@ -101,6 +108,7 @@ def video_feed():
 api_v1 = Blueprint('api_v1', __name__)
 
 def profile(func):
+    @wraps(func)
     def wrapper(*args, **kwargs):
         start = time.perf_counter()
         result = func(*args, **kwargs)
@@ -110,15 +118,41 @@ def profile(func):
     return wrapper
 
 USERS = {}
-with open(os.path.join(os.path.dirname(__file__), '..', 'users.txt')) as f:
-    for line in f:
-        if line.strip():
-            username, password, role = line.strip().split(':')
-            USERS[username] = {'password': password, 'role': role}
+if os.path.exists(AUTH_USERS_FILE):
+    with open(AUTH_USERS_FILE, encoding='utf-8') as users_file:
+        for line_number, line in enumerate(users_file, start=1):
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            try:
+                username, password, role = line.split(':', maxsplit=2)
+            except ValueError:
+                logging.warning("Ignoring malformed user entry on line %s", line_number)
+                continue
+            if '$' not in password or ':' not in password:
+                logging.warning(
+                    "Ignoring plaintext password for user %s on line %s; "
+                    "use Werkzeug's generate_password_hash() instead.",
+                    username,
+                    line_number,
+                )
+                continue
+            USERS[username] = {'password_hash': password, 'role': role}
+else:
+    logging.warning(
+        "Authentication user file %s was not found; protected endpoints are disabled.",
+        AUTH_USERS_FILE,
+    )
 
 def check_auth(username, password):
     user = USERS.get(username)
-    return user and user['password'] == password
+    if not user:
+        return False
+    try:
+        return check_password_hash(user['password_hash'], password)
+    except ValueError:
+        logging.warning("Ignoring invalid password hash for user %s.", username)
+        return False
 
 def get_role(username):
     user = USERS.get(username)
@@ -204,6 +238,15 @@ def api_status():
         'fire_location': robot_controller.fire_location
     }
     return jsonify(status)
+
+@api_v1.route('/health')
+def api_health():
+    camera_ready = video_capture.isOpened()
+    return jsonify({
+        'status': 'ok' if camera_ready else 'degraded',
+        'simulation_mode': SIMULATION_MODE,
+        'camera_ready': camera_ready,
+    }), 200 if camera_ready else 503
 
 @api_v1.route('/vision_detection', methods=['POST'])
 @profile

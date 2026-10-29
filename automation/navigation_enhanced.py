@@ -33,8 +33,10 @@ class NavigationEnhanced:
 
     def update_grid_with_obstacles(self):
         fused_data = self.sensor_fusion.fuse()
-        # For simplicity, assume fused_data is a list of obstacle coordinates
         self.grid = np.zeros(self.grid_size)
+        if np.asarray(fused_data).ndim != 2 or np.asarray(fused_data).shape[1] < 2:
+            logging.info("Sensor data contains no obstacle-coordinate pairs.")
+            return
         for obs in fused_data:
             x, y = int(obs[0]), int(obs[1])
             if 0 <= x < self.grid_size[0] and 0 <= y < self.grid_size[1]:
@@ -113,3 +115,24 @@ class NavigationEnhanced:
             actuator_controller.stop()
             return
         self.move_along_path(path, actuator_controller)
+
+
+class EnhancedNavigationController(NavigationEnhanced):
+    """Compatibility controller used by the SLAM integration tests."""
+
+    def __init__(self, grid_size=(20, 20)):
+        super().__init__(grid_size=grid_size)
+        self.slam = None
+
+    def update_sensors(self, lidar_data=None, ultrasonic_data=None, camera_data=None):
+        super().update_sensors(lidar_data, ultrasonic_data, camera_data)
+        if self.slam is not None:
+            values = []
+            for sensor_data in (lidar_data, ultrasonic_data, camera_data):
+                if sensor_data is not None:
+                    values.extend(np.asarray(sensor_data, dtype=float).reshape(-1).tolist())
+            if values:
+                self.slam.update(np.asarray(values, dtype=float))
+
+    def plan_path(self):
+        return self.a_star_search()
