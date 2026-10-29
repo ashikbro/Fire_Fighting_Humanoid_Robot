@@ -1,0 +1,7 @@
+# Copy this file to users.txt and replace the example hashes.
+# Format: username:werkzeug_password_hash:role
+# Generate a hash with:
+# python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your-password'))"
+admin:REPLACE_WITH_WERKZEUG_PASSWORD_HASH:admin
+operator:REPLACE_WITH_WERKZEUG_PASSWORD_HASH:operator
+viewer:REPLACE_WITH_WERKZEUG_PASSWORD_HASH:viewer

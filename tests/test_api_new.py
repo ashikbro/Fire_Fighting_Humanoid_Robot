@@ -1,6 +1,11 @@
+import os
+
+os.environ['DISABLE_CAMERA_THREAD'] = 'true'
+
 import pytest
 import json
-from src.api import app
+from werkzeug.security import generate_password_hash
+from src.api import app, check_auth, USERS
 
 @pytest.fixture
 def client():
@@ -9,12 +14,19 @@ def client():
         yield client
 
 def test_api_status(client):
-    response = client.get('/api/status')
+    response = client.get('/api/v1/status')
     assert response.status_code == 200
     data = json.loads(response.data)
     assert 'gps' in data
     assert 'fire_severity' in data
     assert 'fire_location' in data
+
+def test_api_health_in_simulation(client, monkeypatch):
+    monkeypatch.setattr('src.api.SIMULATION_MODE', True)
+    response = client.get('/api/v1/health')
+    assert response.status_code == 200
+    assert response.json['status'] == 'ok'
+    assert response.json['simulation_mode'] is True
 
 def test_api_move_valid_command(client):
     commands = [
@@ -24,22 +36,31 @@ def test_api_move_valid_command(client):
         'start_auto_patrol', 'stop_auto_patrol'
     ]
     for cmd in commands:
-        response = client.post('/api/move', json={'command': cmd})
+        response = client.post('/api/v1/move', json={'command': cmd})
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data['status'] == 'success'
         assert data['command'] == cmd
 
 def test_api_move_invalid_command(client):
-    response = client.post('/api/move', json={'command': 'invalid_command'})
+    response = client.post('/api/v1/move', json={'command': 'invalid_command'})
     assert response.status_code == 400
     data = json.loads(response.data)
     assert 'error' in data
 
 def test_vision_detection_no_file(client):
-    response = client.post('/vision_detection')
+    response = client.post('/api/v1/vision_detection')
     assert response.status_code == 400
     data = json.loads(response.data)
     assert 'error' in data
+
+def test_hashed_authentication():
+    USERS['test-user'] = {
+        'password_hash': generate_password_hash('correct-password'),
+        'role': 'operator',
+    }
+    assert check_auth('test-user', 'correct-password')
+    assert not check_auth('test-user', 'wrong-password')
+    USERS.pop('test-user')
 
 # Additional tests for vision_detection with file upload can be added if needed

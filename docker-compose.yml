@@ -4,9 +4,16 @@ services:
   fire_fighting_robot:
     build: .
     ports:
-      - "8000:8000"
+      - "5000:5000"
     volumes:
       - .:/app
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONPATH=/app
+      - SIMULATION_MODE=true
+      - DISABLE_CAMERA_THREAD=false
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:5000/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

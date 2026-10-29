@@ -103,10 +103,15 @@ cython_debug/
 
 # Virtual environment
 venv/
+.venv/
 ENV/
 env/
 env.bak/
 venv.bak/
+.env
+users.txt
+incident_history.log
+fire_severity_prediction.log
 
 # MacOS
 .DS_Store
