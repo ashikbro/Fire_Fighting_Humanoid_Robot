@@ -1,8 +1,15 @@
+import pytest
 import unittest
-from hardware_integration import sensor_interface, actuator_interface
+
+pytestmark = pytest.mark.hardware
+
+# hardware_integration is imported inside the tests so that deselecting
+# hardware tests (-m "not hardware") works where the package is unavailable.
 
 class TestSensorInterface(unittest.TestCase):
     def test_get_all_sensor_data(self):
+        from hardware_integration import sensor_interface
+
         data = sensor_interface.get_all_sensor_data()
         self.assertIn("temperature", data)
         self.assertIn("smoke_density", data)
@@ -15,6 +22,8 @@ class TestSensorInterface(unittest.TestCase):
 
 class TestActuatorInterface(unittest.TestCase):
     def test_actuator_functions(self):
+        from hardware_integration import actuator_interface
+
         # Just test that functions run without error
         actuator_interface.move_forward(5)
         actuator_interface.turn(90)
