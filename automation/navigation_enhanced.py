@@ -10,10 +10,24 @@ class NavigationEnhanced:
     Enhanced navigation controller with A* path planning and obstacle avoidance.
     """
 
-    def __init__(self, grid_size=(20, 20)):
+    def __init__(self, grid_size=(20, 20), resolution=1.0, max_range=10.0,
+                 ultrasonic_fov=np.pi / 2):
+        """
+        :param grid_size: (nx, ny) occupancy grid dimensions, indexed grid[x, y].
+        :param resolution: metres per grid cell; range readings are divided by
+            this to convert them into cell offsets.
+        :param max_range: readings at or beyond this distance (metres) are
+            treated as "no return" and do not mark an obstacle.
+        :param ultrasonic_fov: total angular spread (radians) of the
+            ultrasonic array, centred on the robot's heading.
+        """
         self.sensor_fusion = SensorFusion()
         self.grid_size = grid_size
+        self.resolution = float(resolution)
+        self.max_range = float(max_range)
+        self.ultrasonic_fov = float(ultrasonic_fov)
         self.current_position = (0, 0)
+        self.heading = 0.0  # radians, 0 = +x axis, counter-clockwise positive
         self.goal_position = None
         self.grid = np.zeros(grid_size)  # 0: free, 1: obstacle
 
@@ -31,15 +45,79 @@ class NavigationEnhanced:
         logging.info("Sensor data updated in sensor fusion module.")
         self.update_grid_with_obstacles()
 
+    @staticmethod
+    def lidar_angles(n, heading=0.0):
+        """Bearings for an n-beam LIDAR sweep evenly covering 360 degrees,
+        starting at the robot's heading."""
+        return heading + 2 * np.pi * np.arange(n) / n
+
+    @staticmethod
+    def ultrasonic_angles(n, heading=0.0, fov=np.pi / 2):
+        """Bearings for n ultrasonic sensors spread evenly across `fov`,
+        centred on the robot's heading."""
+        if n == 1:
+            return np.array([heading])
+        return heading + np.linspace(-fov / 2, fov / 2, n)
+
+    def ranges_to_cells(self, ranges, angles):
+        """
+        Convert range readings (metres) at the given bearings into grid cells
+        relative to `current_position`. Readings that are non-finite,
+        non-positive, at/beyond `max_range`, outside the grid, or that land on
+        the robot's own cell are dropped.
+        :return: set of (x, y) integer cells
+        """
+        ranges = np.asarray(ranges, dtype=float).ravel()
+        angles = np.asarray(angles, dtype=float).ravel()
+        if ranges.shape != angles.shape:
+            raise ValueError("ranges and angles must have the same length")
+
+        valid = np.isfinite(ranges) & (ranges > 0) & (ranges < self.max_range)
+        ranges, angles = ranges[valid], angles[valid]
+
+        x0, y0 = self.current_position
+        xs = np.rint(x0 + ranges * np.cos(angles) / self.resolution).astype(int)
+        ys = np.rint(y0 + ranges * np.sin(angles) / self.resolution).astype(int)
+
+        start = (int(x0), int(y0))
+        cells = set()
+        for x, y in zip(xs, ys):
+            cell = (int(x), int(y))
+            if cell == start:
+                continue
+            if 0 <= cell[0] < self.grid_size[0] and 0 <= cell[1] < self.grid_size[1]:
+                cells.add(cell)
+        return cells
+
     def update_grid_with_obstacles(self):
-        fused_data = self.sensor_fusion.fuse()
-        # For simplicity, assume fused_data is a list of obstacle coordinates
+        """
+        Rebuild the occupancy grid from the latest range sensor readings.
+
+        SensorFusion.fuse() returns a flat vector of concatenated readings, which
+        loses which sensor (and therefore which bearing) each value came from,
+        and mixes in non-range camera features. So obstacle geometry is derived
+        from the per-sensor range arrays held by the fusion module instead:
+        LIDAR beams are assumed to sweep 360 degrees evenly from the heading,
+        ultrasonic sensors to spread across `ultrasonic_fov` around the heading.
+        Camera data is not a range measurement and is not projected.
+        """
         self.grid = np.zeros(self.grid_size)
-        for obs in fused_data:
-            x, y = int(obs[0]), int(obs[1])
-            if 0 <= x < self.grid_size[0] and 0 <= y < self.grid_size[1]:
-                self.grid[x, y] = 1
-        logging.info("Grid updated with obstacles.")
+        cells = set()
+
+        lidar = self.sensor_fusion.lidar_data
+        if lidar is not None and lidar.size:
+            cells |= self.ranges_to_cells(lidar, self.lidar_angles(lidar.size, self.heading))
+
+        ultrasonic = self.sensor_fusion.ultrasonic_data
+        if ultrasonic is not None and ultrasonic.size:
+            cells |= self.ranges_to_cells(
+                ultrasonic,
+                self.ultrasonic_angles(ultrasonic.size, self.heading, self.ultrasonic_fov),
+            )
+
+        for x, y in cells:
+            self.grid[x, y] = 1
+        logging.info(f"Grid updated with {len(cells)} obstacle cells.")
 
     def heuristic(self, a, b):
         # Manhattan distance heuristic
