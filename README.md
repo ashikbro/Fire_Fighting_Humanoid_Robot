@@ -14,7 +14,15 @@ Fire_Fighting_Humanoid_Robot/
 │   ├── api_part1.py             # FastAPI fire severity prediction API (port 8000)
 │   ├── auth.py                  # API user management (hashed passwords)
 │   ├── visualization.py         # Visualization utilities for data and model
-│   └── fire_gui_app.py          # Tkinter GUI application for fire severity prediction
+│   ├── api_control.py           # FastAPI simulated control API for the web dashboard
+│   └── dashboard.py             # Streamlit dashboard for prediction logs
+│
+├── gui_simulation/
+│   ├── gui_app.py               # Tkinter GUI for fire severity prediction
+│   └── gui_with_visuals.py      # Model comparison charts
+│
+├── dashboard/
+│   └── firebot_updated.html     # Web control dashboard (served with api_control.py)
 │
 ├── data/
 │   └── fire_data_bangladesh.csv  # Dataset (not committed, see Notes)
@@ -120,15 +128,29 @@ Response:
 }
 ```
 
-`python main.py` starts both APIs, the vision detector and the GUI together.
+`python main.py` starts the APIs (ports 5000, 8000 and 8001), the vision detector and the GUI together.
 
 ### GUI Application
 
 Run the Tkinter GUI application to input sensor data and get fire severity predictions via the API:
 
 ```bash
-python src/fire_gui_app.py
+python gui_simulation/gui_app.py
 ```
+
+### Dashboards
+
+Streamlit dashboard for the prediction logs in `alerts/prediction_logs.csv`
+(overview, daily trend, hour/day heatmap, auto-refresh in the sidebar):
+
+```bash
+streamlit run src/dashboard.py
+```
+
+Web control dashboard: run `uvicorn src.api_control:app --port 8001` and open
+http://localhost:8001/ (or use the GUI's "Open Dashboard" button). The page
+must be opened from that server, not as a local file, because it calls the
+API's `/sensor_data`, `/move` and `/control` endpoints.
 
 ## Notes
 

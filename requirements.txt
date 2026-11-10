@@ -10,6 +10,8 @@ flask
 werkzeug
 fastapi
 uvicorn
+requests
+streamlit
 python-multipart
 pillow
 tensorflow

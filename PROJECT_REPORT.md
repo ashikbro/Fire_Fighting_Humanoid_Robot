@@ -227,7 +227,7 @@ model.fit(X_scaled, y_categorical, validation_split=0.2, epochs=100, batch_size=
 - Run batch prediction: `python src/predict_fire.py --batch input.csv --output output.csv`
 - Start API server: `uvicorn src.api:app --reload`
 - Run GUI app: `python gui_simulation/gui_app.py`
-- Open dashboard: open `dashboard/firebot_updated.html` in a browser
+- Open dashboard: run `uvicorn src.api_control:app --port 8001` and open http://localhost:8001/
 - Run main orchestration: `python main.py`
 
 ## Summary

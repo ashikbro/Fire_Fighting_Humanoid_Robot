@@ -1,4 +1,7 @@
+import os
+
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Literal
 import logging
@@ -22,6 +25,15 @@ robot_status = {
     "movement_mode": "Auto",
     "speed": 50,
 }
+
+DASHBOARD_HTML = os.path.join(os.path.dirname(__file__), "..", "dashboard", "firebot_updated.html")
+
+
+@app.get("/", include_in_schema=False)
+def dashboard():
+    """Serve the web dashboard, which calls this API's endpoints."""
+    return FileResponse(DASHBOARD_HTML)
+
 
 class MoveCommand(BaseModel):
     direction: Literal["forward", "backward", "left", "right", "stop"]

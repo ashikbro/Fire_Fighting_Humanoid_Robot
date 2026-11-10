@@ -16,9 +16,12 @@ def run_api():
     # Robot control API (Flask, src/api.py) on API_PORT (default 5000)
     control = run_subprocess([sys.executable, "src/api.py"], "Control API")
     # Fire severity prediction API (FastAPI, src/api_part1.py) on port 8000,
-    # used by src/fire_gui_app.py
+    # used by gui_simulation/gui_app.py
     predict = run_subprocess([sys.executable, "-m", "uvicorn", "src.api_part1:app", "--host", "127.0.0.1", "--port", "8000"], "Prediction API")
-    return control, predict
+    # Web dashboard backend (FastAPI, src/api_control.py) on port 8001;
+    # open http://localhost:8001/
+    dashboard = run_subprocess([sys.executable, "-m", "uvicorn", "src.api_control:app", "--host", "127.0.0.1", "--port", "8001"], "Dashboard API")
+    return control, predict, dashboard
 
 def run_gui():
     # Run GUI application

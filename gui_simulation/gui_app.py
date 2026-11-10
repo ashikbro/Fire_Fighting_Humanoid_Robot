@@ -2,9 +2,9 @@ import tkinter as tk
 from tkinter import messagebox
 import requests
 import webbrowser
-import os
 
 API_URL = "http://localhost:8000/predict"
+DASHBOARD_URL = "http://localhost:8001/"
 
 class FireSeverityApp:
     def __init__(self, root):
@@ -63,17 +63,15 @@ class FireSeverityApp:
             response.raise_for_status()
             result = response.json()
             severity = result.get("fire_severity", "Unknown")
+            if severity not in ["Minor", "Moderate", "Severe"]:
+                severity = "Unknown"
             self.result_label.config(text=f"🔥 Predicted Fire Severity: {severity}")
         except requests.exceptions.RequestException as e:
             messagebox.showerror("API Error", f"Failed to get prediction: {e}")
 
     def open_dashboard(self):
-        # Path to the dashboard HTML file in the dashboard directory
-        dashboard_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dashboard", "index.html"))
-        if os.path.exists(dashboard_path):
-            webbrowser.open_new_tab(f"file:///{dashboard_path}")
-        else:
-            messagebox.showerror("File Not Found", f"Dashboard file not found at {dashboard_path}")
+        # The dashboard is served by src/api_control.py (started by main.py)
+        webbrowser.open_new_tab(DASHBOARD_URL)
 
 if __name__ == "__main__":
     root = tk.Tk()
