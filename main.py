@@ -13,8 +13,12 @@ def run_subprocess(command, name):
         return None
 
 def run_api():
-    # Run FastAPI server
-    return run_subprocess([sys.executable, "-m", "uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"], "API")
+    # Robot control API (Flask, src/api.py) on API_PORT (default 5000)
+    control = run_subprocess([sys.executable, "src/api.py"], "Control API")
+    # Fire severity prediction API (FastAPI, src/api_part1.py) on port 8000,
+    # used by src/fire_gui_app.py
+    predict = run_subprocess([sys.executable, "-m", "uvicorn", "src.api_part1:app", "--host", "127.0.0.1", "--port", "8000"], "Prediction API")
+    return control, predict
 
 def run_gui():
     # Run GUI application

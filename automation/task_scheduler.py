@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 from automation.sensor_manager import SensorManager
@@ -8,7 +9,11 @@ class TaskScheduler:
     def __init__(self):
         self.sensor_manager = SensorManager()
         self.navigation_controller = NavigationController()
-        self.alert_manager = AlertManager("sender@example.com", "password", "receiver@example.com")
+        self.alert_manager = AlertManager(
+            os.environ["ALERT_SENDER_EMAIL"],
+            os.environ["ALERT_SENDER_PASSWORD"],
+            os.environ["ALERT_RECEIVER_EMAIL"],
+        )
         self.running = False
 
     def sensor_task(self):

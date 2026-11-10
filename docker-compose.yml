@@ -4,9 +4,13 @@ services:
   fire_fighting_robot:
     build: .
     ports:
-      - "8000:8000"
+      - "5000:5000"
     volumes:
       - .:/app
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONPATH=/app
+      - API_HOST=0.0.0.0
+    env_file:
+      - path: .env
+        required: false

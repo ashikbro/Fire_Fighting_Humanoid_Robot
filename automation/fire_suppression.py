@@ -1,3 +1,4 @@
+import os
 class FireSuppressionController:
     def __init__(self, actuator_manager, navigation_controller, alert_manager):
         self.actuator_manager = actuator_manager
@@ -36,7 +37,11 @@ if __name__ == "__main__":
 
     actuator_manager = ActuatorManager()
     navigation_controller = NavigationController()
-    alert_manager = AlertManager("sender@example.com", "password", "receiver@example.com")
+    alert_manager = AlertManager(
+        os.environ["ALERT_SENDER_EMAIL"],
+        os.environ["ALERT_SENDER_PASSWORD"],
+        os.environ["ALERT_RECEIVER_EMAIL"],
+    )
 
     fsc = FireSuppressionController(actuator_manager, navigation_controller, alert_manager)
     # Example usage

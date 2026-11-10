@@ -5,10 +5,10 @@ Thank you for your interest in contributing!
 ## How to Contribute
 
 1. Fork the repository and create your branch from `main`.
-2. Install dependencies: `pip install -r requirements.txt`
+2. Install dependencies: `pip install -r requirements-dev.txt`
 3. Add your feature or bugfix with clear, documented code.
 4. Add or update tests as needed.
-5. Run tests: `pytest`
+5. Run tests: `pytest -m "not hardware and not ui and not data"` (the same set CI runs)
 6. Submit a pull request with a clear description of your changes.
 
 ## Code Style

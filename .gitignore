@@ -127,15 +127,9 @@ venv.bak/
 *.pt
 *.onnx
 *.model
-vision_fire_detection/
-  dataset_fire_images/
-    train/
-      fire/
-        (fire images here)
-      non_fire/
-        (non-fire images here)
-    val/
-      fire/
-        (fire images here)
-      non_fire/
-        (non-fire images here)
+vision_fire_detection/dataset_fire_images/
+
+# Secrets
+.env
+users.txt
+incident_history.log

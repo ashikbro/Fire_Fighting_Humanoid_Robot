@@ -10,15 +10,17 @@ Fire_Fighting_Humanoid_Robot/
 ├── src/
 │   ├── train_fire_model.py       # Training script
 │   ├── predict_fire.py           # Prediction script (supports CLI and batch prediction)
-│   ├── api.py                   # FastAPI REST API for real-time prediction
+│   ├── api.py                   # Flask robot control API (port 5000)
+│   ├── api_part1.py             # FastAPI fire severity prediction API (port 8000)
+│   ├── auth.py                  # API user management (hashed passwords)
 │   ├── visualization.py         # Visualization utilities for data and model
 │   └── fire_gui_app.py          # Tkinter GUI application for fire severity prediction
 │
 ├── data/
-│   └── fire_data_bangladesh.csv  # Dataset
+│   └── fire_data_bangladesh.csv  # Dataset (not committed, see Notes)
 │
 ├── models/
-│   ├── fire_severity_model.pkl   # Trained model
+│   ├── fire_severity_model.pkl   # Trained model (created by training)
 │   └── label_encoder.pkl         # Label encoder
 │
 ├── results/
@@ -72,12 +74,31 @@ The output CSV will contain an additional column `PredictedFireSeverity`.
 
 Use the visualization utilities to explore data distributions, fire severity counts, feature importance, and ROC curves. You can import and call functions from `src/visualization.py` in your scripts or interactive sessions.
 
-### Real-time Prediction API
+### Robot Control API (Flask)
 
-Start the FastAPI server:
+The robot control API is in `src/api.py`. Some endpoints need a login, so create
+at least one user first. Users are stored in `users.txt` (git-ignored) with
+hashed passwords:
 
 ```bash
-uvicorn src.api:app --reload
+cp .env.example .env
+python -m src.auth add admin admin
+```
+
+Then start the server (listens on `API_HOST:API_PORT`, default `127.0.0.1:5000`):
+
+```bash
+python src/api.py
+```
+
+Endpoints are under `/api/v1`, for example `GET /api/v1/status` and
+`POST /api/v1/move` with `{"command": "move_forward"}`. Admin/operator endpoints
+use HTTP Basic auth.
+
+### Fire Severity Prediction API (FastAPI)
+
+```bash
+uvicorn src.api_part1:app --port 8000
 ```
 
 Send POST requests to `http://localhost:8000/predict` with JSON body:
@@ -99,6 +120,8 @@ Response:
 }
 ```
 
+`python main.py` starts both APIs, the vision detector and the GUI together.
+
 ### GUI Application
 
 Run the Tkinter GUI application to input sensor data and get fire severity predictions via the API:
@@ -109,7 +132,10 @@ python src/fire_gui_app.py
 
 ## Notes
 
-- Ensure the dataset file is in the `data/` directory.
+- The dataset and trained models are **not** in the repository (`*.csv` and
+  `*.pkl` are git-ignored). Put the dataset at `data/fire_data_bangladesh.csv`
+  and run `python src/train_fire_model.py` to create the files in `models/`.
+- Secrets (alert e-mail login, users file) go in `.env`, never in code. See `.env.example`.
 - The trained model and label encoder files must be present in the `models/` directory to run predictions.
 - The confusion matrix and feature importance images will be saved in the `results/` directory after training.
 - The API server must be running to use the GUI application.

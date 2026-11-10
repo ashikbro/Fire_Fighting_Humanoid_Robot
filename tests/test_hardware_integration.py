@@ -1,5 +1,11 @@
 import unittest
-from hardware_integration import sensor_interface, actuator_interface
+
+import pytest
+
+pytestmark = pytest.mark.hardware
+hardware_integration = pytest.importorskip("hardware_integration")
+sensor_interface = hardware_integration.sensor_interface
+actuator_interface = hardware_integration.actuator_interface
 
 class TestSensorInterface(unittest.TestCase):
     def test_get_all_sensor_data(self):

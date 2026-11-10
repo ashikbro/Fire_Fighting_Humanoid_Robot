@@ -14,6 +14,7 @@ import statistics
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from automation.robot_controller import RobotController
+from src import auth
 from vision_fire_detection.fire_detection import FireDetection
 import logging
 
@@ -109,20 +110,13 @@ def profile(func):
         return result
     return wrapper
 
-USERS = {}
-with open(os.path.join(os.path.dirname(__file__), '..', 'users.txt')) as f:
-    for line in f:
-        if line.strip():
-            username, password, role = line.strip().split(':')
-            USERS[username] = {'password': password, 'role': role}
+USERS = auth.load_users()
 
 def check_auth(username, password):
-    user = USERS.get(username)
-    return user and user['password'] == password
+    return auth.check_auth(USERS, username, password)
 
 def get_role(username):
-    user = USERS.get(username)
-    return user['role'] if user else None
+    return auth.get_role(USERS, username)
 
 def requires_role(required_role):
     def decorator(f):
