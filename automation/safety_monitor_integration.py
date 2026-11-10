@@ -4,8 +4,9 @@ import logging
 from automation.safety_monitor import SafetyMonitor
 
 class SafetyMonitorIntegration:
-    def __init__(self, battery_threshold=20, check_interval=5):
-        self.safety_monitor = SafetyMonitor(battery_threshold=battery_threshold, check_interval=check_interval)
+    def __init__(self, battery_threshold=20, check_interval=5, watchdog_timeout=10):
+        self.safety_monitor = SafetyMonitor(battery_threshold=battery_threshold, watchdog_timeout=watchdog_timeout)
+        self.check_interval = check_interval
         self.monitor_thread = None
         self.running = False
 
@@ -25,12 +26,15 @@ class SafetyMonitorIntegration:
 
     def _monitor_loop(self):
         while self.running:
-            # Example: check battery level from sensor interface or system API
-            battery_level = self.get_battery_level()
-            self.safety_monitor.check_battery(battery_level)
-            # Reset watchdog periodically
-            self.safety_monitor.reset_watchdog()
-            time.sleep(self.safety_monitor.check_interval)
+            self.check_once()
+            time.sleep(self.check_interval)
+
+    def check_once(self):
+        # Example: check battery level from sensor interface or system API
+        self.safety_monitor.battery_level = self.get_battery_level()
+        self.safety_monitor.check_battery()
+        # Feed the watchdog so it does not trigger a system reset
+        self.safety_monitor.heartbeat()
 
     def get_battery_level(self):
         # Placeholder: replace with actual battery reading code
