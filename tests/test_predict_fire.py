@@ -2,6 +2,8 @@ import pytest
 from src import predict_fire
 import sys
 
+pytestmark = pytest.mark.data
+
 def test_main_function(monkeypatch):
     test_args = ["predict_fire.py"]
     monkeypatch.setattr(sys, 'argv', test_args)

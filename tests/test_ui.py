@@ -1,10 +1,16 @@
 import pytest
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
+
+pytestmark = pytest.mark.ui
+
+# selenium is imported lazily so that deselecting UI tests (-m "not ui")
+# works in environments where selenium is not installed. Locators use the
+# string values of selenium's By constants ("tag name", "name").
 
 @pytest.fixture(scope="module")
 def driver():
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     driver = webdriver.Chrome(options=chrome_options)
@@ -17,17 +23,17 @@ def test_login_page_title(driver):
 
 def test_login_form_exists(driver):
     driver.get("http://localhost:5000/login")
-    form = driver.find_element(By.TAG_NAME, "form")
+    form = driver.find_element("tag name", "form")
     assert form is not None
 
 def test_username_input_exists(driver):
     driver.get("http://localhost:5000/login")
-    username_input = driver.find_element(By.NAME, "username")
+    username_input = driver.find_element("name", "username")
     assert username_input is not None
 
 def test_password_input_exists(driver):
     driver.get("http://localhost:5000/login")
-    password_input = driver.find_element(By.NAME, "password")
+    password_input = driver.find_element("name", "password")
     assert password_input is not None
 
 if __name__ == "__main__":

@@ -3,6 +3,8 @@ import pandas as pd
 from src import train_fire_model
 import sys
 
+pytestmark = pytest.mark.data
+
 def test_data_loading():
     df = pd.read_csv('data/fire_data_bangladesh.csv')
     assert not df.empty

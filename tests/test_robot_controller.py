@@ -53,11 +53,3 @@ class TestRobotController(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
-vision_fire_detection/dataset_fire_images/
-    train/
-        fire/
-        non_fire/
-    val/
-        fire/
-        non_fire/
